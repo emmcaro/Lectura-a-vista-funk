@@ -10,11 +10,11 @@ from music21 import *
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURACIÓ ---
-st.set_page_config(page_title="Generador de Funk (Transposició)", layout="wide")
-st.title("🎸 Generador de Funk: Transport i Armadures")
-st.write("Estructura AA BB en una tonalitat aleatòria (prioritzant les fàcils) amb armadura correcta.")
+st.set_page_config(page_title="Generador de Funk (Mixolidi)", layout="wide")
+st.title("🎸 Generador de Funk: Lògica de Dominants")
+st.write("Estructura AA BB. L'armadura es calcula com a V7 de la tonalitat de destí.")
 
-# INICIALITZACIÓ DE VARIABLES (Evita l'error de recàrrega de pàgina)
+# INICIALITZACIÓ
 if 'xml_data' not in st.session_state:
     st.session_state.xml_data = None
     st.session_state.score_generat = False
@@ -31,18 +31,13 @@ if not os.path.exists(FITXER_BASE):
 # --- LÒGICA DE TRANSPORT ---
 
 def obtenir_tonalitat_aleatoria():
-    # Definim les tonalitats i el seu pes (més alt = més probable)
+    # Prioritzem tonalitats amb poques alteracions
     opcions = [
-        ('C', 10),  # 0 alteracions
-        ('G', 8), ('F', 8),  # 1 alteració
-        ('D', 6), ('Bb', 6), # 2 alteracions
-        ('A', 4), ('Eb', 4), # 3 alteracions
-        ('E', 2), ('Ab', 2), # 4 alteracions
-        ('B', 1), ('Db', 1)  # 5 alteracions
+        ('C', 10), ('G', 8), ('F', 8), ('D', 6), ('Bb', 6), 
+        ('A', 4), ('Eb', 4), ('E', 2), ('Ab', 2), ('B', 1), ('Db', 1)
     ]
     tonalitats, pesos = zip(*opcions)
-    triada = random.choices(tonalitats, weights=pesos, k=1)[0]
-    return triada
+    return random.choices(tonalitats, weights=pesos, k=1)[0]
 
 # --- GENERACIÓ DE SCORE ---
 
@@ -50,10 +45,9 @@ def generar_estudi_final():
     score_in = converter.parse(FITXER_BASE)
     parts_in = list(score_in.parts)
     
-    patrons_dreta = []
-    patrons_esquerra = []
+    patrons_dreta, patrons_esquerra = [], []
     
-    # 1. Extracció de patrons amb DETECCIÓ ROBUSTA DE MÀ ESQUERRA
+    # 1. Extracció de patrons (Detecció robusta de mans)
     if len(parts_in) >= 2:
         mesures_d = list(parts_in[0].getElementsByClass(stream.Measure))
         mesures_e = list(parts_in[1].getElementsByClass(stream.Measure))
@@ -61,35 +55,29 @@ def generar_estudi_final():
             patrons_dreta.append(copy.deepcopy(md))
             patrons_esquerra.append(copy.deepcopy(me))
     else:
-        all_measures = list(parts_in[0].getElementsByClass(stream.Measure))
-        for m in all_measures:
+        for m in parts_in[0].getElementsByClass(stream.Measure):
             m_rh, m_lh = stream.Measure(), stream.Measure()
             for n in m.flatten().notesAndRests:
-                # Detecció per a notes normals i per acords de Logic Pro
-                staff_val = getattr(n, 'staff', None)
+                staff_val = getattr(n, 'staff', 1)
                 if staff_val is None and n.isChord:
-                    try:
-                        staff_val = n.notes[0].staff
-                    except:
-                        staff_val = 1
-                if staff_val is None:
-                    staff_val = 1
-                
-                # Assignem al pentagrama correcte
-                if staff_val == 2: 
-                    m_lh.insert(n.offset, copy.deepcopy(n))
-                else: 
-                    m_rh.insert(n.offset, copy.deepcopy(n))
-                    
-            patrons_dreta.append(m_rh)
-            patrons_esquerra.append(m_lh)
+                    try: staff_val = n.notes[0].staff
+                    except: staff_val = 1
+                if staff_val == 2: m_lh.insert(n.offset, copy.deepcopy(n))
+                else: m_rh.insert(n.offset, copy.deepcopy(n))
+            patrons_dreta.append(m_rh); patrons_esquerra.append(m_lh)
     
-    # 2. Triem tonalitat i calculem interval de transport
-    tonalitat_desti = obtenir_tonalitat_aleatoria()
-    itvl = interval.Interval(pitch.Pitch('C'), pitch.Pitch(tonalitat_desti))
-    armadura = key.KeySignature(key.Key(tonalitat_desti).sharps)
+    # 2. Tonalitat del Groove i Tonalitat de l'Armadura
+    tonalitat_groove = obtenir_tonalitat_aleatoria() # Ex: 'G' (per a un G7)
+    
+    # Calcul d'interval des de Do (base del fitxer) fins a la nova fonamental
+    itvl = interval.Interval(pitch.Pitch('C'), pitch.Pitch(tonalitat_groove))
+    
+    # LÒGICA DEMANADA: L'armadura és la de la tonalitat que resoldria (una 4a justa amunt)
+    # Si el groove és G7, l'armadura és de Do Major (G -> C)
+    tonalitat_resolucio = key.Key(tonalitat_groove).transpose('P4')
+    armadura = key.KeySignature(tonalitat_resolucio.sharps)
 
-    # 3. Muntem la partitura
+    # 3. Muntatge
     score_out = stream.Score()
     p_d, p_e = stream.Part(), stream.Part()
     
@@ -103,45 +91,33 @@ def generar_estudi_final():
         c_d.number = c_e.number = i + 1
         
         for c in [c_d, c_e]:
-            # Netegem metadades del fitxer original
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout']:
                 c.removeByClass(cl)
             
-            # TRANSPOSAR EL COMPÀS
+            # Transportem les notes
             c.transpose(itvl, inPlace=True)
             
-            # Forçar que les notes s'ajustin a l'armadura (CORRECCIÓ D'ACORDS)
+            # Netegem accidentals perquè l'armadura agafi el control
             for el in c.flatten().notes:
                 if el.isNote:
-                    el.pitch.step = el.pitch.step
+                    el.pitch.accidental = None 
                 elif el.isChord:
                     for p in el.pitches:
-                        p.step = p.step
+                        p.accidental = None
 
-        # Configuració inicial (Compàs 1)
         if i == 0:
-            c_d.insert(0, clef.TrebleClef())
-            c_e.insert(0, clef.BassClef())
-            c_d.insert(0, meter.TimeSignature('4/4'))
-            c_e.insert(0, meter.TimeSignature('4/4'))
-            # INSERIR ARMADURA
-            c_d.insert(0, copy.deepcopy(armadura))
-            c_e.insert(0, copy.deepcopy(armadura))
+            c_d.insert(0, clef.TrebleClef()); c_e.insert(0, clef.BassClef())
+            c_d.insert(0, meter.TimeSignature('4/4')); c_e.insert(0, meter.TimeSignature('4/4'))
+            c_d.insert(0, copy.deepcopy(armadura)); c_e.insert(0, copy.deepcopy(armadura))
             
-        # Salt de sistema
-        if i == 2: 
-            c_d.insert(0, layout.SystemLayout(isNew=True))
-            
-        # Doble barra final
-        if i == 3:
-            c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
+        if i == 2: c_d.insert(0, layout.SystemLayout(isNew=True))
+        if i == 3: c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
 
-        p_d.append(c_d)
-        p_e.append(c_e)
+        p_d.append(c_d); p_e.append(c_e)
     
     grup = layout.StaffGroup([p_d, p_e], symbol='brace', barTogether=True)
     score_out.insert(0, p_d); score_out.insert(0, p_e); score_out.insert(0, grup)
-    return score_out, tonalitat_desti
+    return score_out, tonalitat_groove
 
 def mostrar_partitura(xml_bytes):
     xml_str = xml_bytes.decode('utf-8')
@@ -164,8 +140,8 @@ def mostrar_partitura(xml_bytes):
 # --- INTERFÍCIE ---
 col1, col2 = st.columns([1, 1])
 with col1:
-    if st.button('🚀 Generar Exercici Transposat', use_container_width=True):
-        with st.spinner('Transposant i calculant armadura...'):
+    if st.button('🚀 Generar Exercici Funk 7th', use_container_width=True):
+        with st.spinner('Calculant transport Mixolidi...'):
             try:
                 nou_score, nota_triada = generar_estudi_final()
                 st.session_state.tonalitat = nota_triada  
@@ -175,11 +151,11 @@ with col1:
                 st.session_state.score_generat = True
                 os.remove(xml_path)
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error tècnic: {e}")
 
-if st.session_state.score_generat and st.session_state.tonalitat is not None:
-    st.info(f"Tonalitat actual: **{st.session_state.tonalitat}**")
+if st.session_state.score_generat:
+    st.success(f"Groove en **{st.session_state.tonalitat}7**")
     with col2:
-        st.download_button(f"📥 Baixar en {st.session_state.tonalitat}", st.session_state.xml_data, f"Funk_{st.session_state.tonalitat}.musicxml", use_container_width=True)
+        st.download_button(f"📥 Baixar MusicXML", st.session_state.xml_data, f"Funk_{st.session_state.tonalitat}7.musicxml", use_container_width=True)
     st.divider()
     mostrar_partitura(st.session_state.xml_data)
