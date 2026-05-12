@@ -12,17 +12,22 @@ warnings.filterwarnings("ignore")
 # --- CONFIGURACIÓ ---
 st.set_page_config(page_title="Generador de Funk (C7)", layout="wide")
 st.title("🎸 Generador de Funk: Groove en C7")
-st.write("Aquesta versió genera 8 compassos aleatoris basats exclusivament en l'acord de C7 (mono-acord).")
+st.write("Versió corregida per a fitxers .musicxml amb mà esquerra.")
 
 if 'xml_data' not in st.session_state:
     st.session_state.xml_data = None
     st.session_state.score_generat = False
 
+# Actualitzat al nou nom del fitxer
 FITXER_BASE = 'patrons funk.musicxml'
 
 if not os.path.exists(FITXER_BASE):
-    st.error(f"⚠️ NO S'HA TROBAT EL FITXER: '{FITXER_BASE}'")
-    st.stop()
+    # Intentem buscar també l'extensió antiga per si de cas
+    if os.path.exists('patrons funk.xml'):
+        FITXER_BASE = 'patrons funk.xml'
+    else:
+        st.error(f"⚠️ NO S'HA TROBAT EL FITXER: '{FITXER_BASE}'")
+        st.stop()
 
 # --- GENERACIÓ DE SCORE ---
 
@@ -33,17 +38,28 @@ def generar_estudi_final():
     
     patrons_dreta, patrons_esquerra = [], []
     
-    # Extraiem els compassos assegurant les dues mans (per problemes de veus ocultes)
     for m in all_measures:
         m_rh, m_lh = stream.Measure(), stream.Measure()
         
+        # Flatten per entrar dins de les "Voices" de Logic
         for n in m.flatten().notesAndRests:
-            staff_val = getattr(n, 'staff', None)
-            if staff_val is None and n.isChord and len(n.notes) > 0:
-                staff_val = getattr(n.notes[0], 'staff', 1)
-            elif staff_val is None:
-                staff_val = 1 
-                
+            # DETECCIO ROBUSTA DE STAFF
+            staff_val = 1 # Per defecte mà dreta
+            
+            # 1. Mirem si l'objecte (Nota/Acord) té l'atribut directament
+            if hasattr(n, 'staff') and n.staff is not None:
+                staff_val = n.staff
+            # 2. Si és un Acord i no el té, mirem les notes que el componen
+            elif n.isChord:
+                # En music21, un Chord té una propietat .notes o ._notes
+                try:
+                    notes_internes = n.notes
+                    if notes_internes and hasattr(notes_internes[0], 'staff'):
+                        staff_val = notes_internes[0].staff
+                except:
+                    pass
+            
+            # Distribuïm segons el staff detectat
             if staff_val == 2:
                 m_lh.insert(n.offset, copy.deepcopy(n))
             else:
@@ -55,27 +71,23 @@ def generar_estudi_final():
     score_out = stream.Score()
     p_d, p_e = stream.Part(), stream.Part()
     
-    # Generem els 8 compassos en C7
     for i in range(8):
         idx = random.randint(0, len(patrons_dreta) - 1)
         c_d, c_e = copy.deepcopy(patrons_dreta[idx]), copy.deepcopy(patrons_esquerra[idx])
         c_d.number = c_e.number = i + 1
         
-        # Ja no cal transposar, només netegem les claus i signes ocults
+        # Neteja de formats per evitar duplicats visuals
         for c in [c_d, c_e]:
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout']:
                 c.removeByClass(cl)
 
-        # Afegim armadura i compàs només al primer
         if i == 0:
             c_d.insert(0, clef.TrebleClef()); c_d.insert(0, meter.TimeSignature('4/4'))
             c_e.insert(0, clef.BassClef()); c_e.insert(0, meter.TimeSignature('4/4'))
             
-        # Salt de línia al compàs 5
         if i == 4: 
             c_d.insert(0, layout.SystemLayout(isNew=True))
             
-        # Barra final al compàs 8
         if i == 7:
             c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
 
@@ -89,9 +101,8 @@ def generar_estudi_final():
 def mostrar_partitura(xml_bytes):
     xml_str = xml_bytes.decode('utf-8')
     xml_escapat = json.dumps(xml_str)
-    # Fons blanc i arrodonit perquè en mode fosc es llegeixi perfectament
     html_code = f"""
-    <div style="background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);">
+    <div style="background-color: white; padding: 20px; border-radius: 10px;">
         <div id="osmdCanvas"></div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.8/build/opensheetmusicdisplay.min.js"></script>
@@ -109,7 +120,7 @@ def mostrar_partitura(xml_bytes):
 col1, col2 = st.columns([1, 1])
 with col1:
     if st.button('🚀 Generar Groove Funk (C7)', use_container_width=True):
-        with st.spinner('Barrejant compassos...'):
+        with st.spinner('Llegint .musicxml i restaurant mà esquerra...'):
             try:
                 nou_score = generar_estudi_final()
                 xml_path = nou_score.write('musicxml')
