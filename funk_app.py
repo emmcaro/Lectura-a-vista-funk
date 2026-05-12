@@ -14,10 +14,14 @@ st.set_page_config(page_title="Generador de Funk Harmònic", layout="wide")
 st.title("🎸 Generador de Funk: Progressió V7 - Var")
 st.write("M1 i M3: V7 | M2 i M4: Variació (VI, bVI7 o I7). Canvis d'armadura automàtics.")
 
+# --- INICIALITZACIÓ ROBUSTA DE L'ESTAT ---
 if 'xml_data' not in st.session_state:
     st.session_state.xml_data = None
+if 'score_generat' not in st.session_state:
     st.session_state.score_generat = False
+if 'tonalitat' not in st.session_state:
     st.session_state.tonalitat = None
+if 'variacio_nom' not in st.session_state:
     st.session_state.variacio_nom = ""
 
 FITXER_BASE = 'patrons funk.musicxml'
@@ -55,6 +59,11 @@ def generar_estudi_final():
         m_rh, m_lh = stream.Measure(), stream.Measure()
         for n in m.flatten().notesAndRests:
             staff_val = getattr(n, 'staff', 1)
+            # Detecció robusta per si Logic Pro amaga el staff als acords
+            if staff_val is None and n.isChord:
+                try: staff_val = n.notes[0].staff
+                except: staff_val = 1
+                
             if staff_val == 2: m_lh.insert(n.offset, copy.deepcopy(n))
             else: m_rh.insert(n.offset, copy.deepcopy(n))
         patrons_dreta.append(m_rh); patrons_esquerra.append(m_lh)
@@ -64,7 +73,6 @@ def generar_estudi_final():
     v7_root = pitch.Pitch(v7_root_name)
     
     # Triem la variació per als compassos 2 i 4
-    # 'VI' -> M2 amunt (menor), 'bVI' -> m2 amunt (dominant), 'I' -> P4 amunt (dominant)
     tipus_var = random.choice(['VI', 'bVI7', 'I7'])
     
     if tipus_var == 'VI':
@@ -82,9 +90,14 @@ def generar_estudi_final():
 
     # Armadures (Mixolídies: 4a justa amunt de la fonamental)
     arm_v7 = key.KeySignature(key.Key(v7_root.transpose('P4').name).sharps)
-    arm_var = key.KeySignature(key.Key(var_root.transpose('P4').name).sharps)
-    if is_minor: # Si és menor (VIm7), l'armadura és la natural del grau (ex: Am7 en C -> 0 sharps)
-         arm_var = key.KeySignature(key.Key(v7_root.transpose('P4').name).sharps)
+    
+    if is_minor: 
+        # Si és menor (ex: Am7), busquem l'armadura natural (G major/E menor -> 1 sostingut, però com a "Dòric" o "Eòlic")
+        # En jazz, el VIm7 sol portar la mateixa armadura que la tonalitat central (Mixolídia del V = Jònica del I)
+        arm_var = key.KeySignature(key.Key(v7_root.transpose('P4').name).sharps)
+    else:
+        # Si és dominant (bVI7 o I7), busquem la seva pròpia 4a justa amunt
+        arm_var = key.KeySignature(key.Key(var_root.transpose('P4').name).sharps)
 
     # 3. Muntatge (AA BB)
     score_out = stream.Score()
@@ -93,12 +106,16 @@ def generar_estudi_final():
     idx_A = random.randint(0, len(patrons_dreta) - 1)
     idx_B = random.randint(0, len(patrons_dreta) - 1)
     
-    # Seqüència: [ (PatA, V7), (PatA, Var), (PatB, V7), (PatB, Var) ]
     for i in range(4):
         idx = idx_A if i < 2 else idx_B
         c_d = copy.deepcopy(patrons_dreta[idx])
         c_e = copy.deepcopy(patrons_esquerra[idx])
         c_d.number = c_e.number = i + 1
+        
+        # Neteja de signatures prèvies per evitar duplicitats
+        for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout']:
+            c_d.removeByClass(cl)
+            c_e.removeByClass(cl)
         
         # Transport base (de C a V7)
         itvl_v7 = interval.Interval(pitch.Pitch('C'), v7_root)
@@ -111,19 +128,30 @@ def generar_estudi_final():
             c_d.transpose(itvl_var, inPlace=True)
             c_e.transpose(itvl_var, inPlace=True)
             if is_minor:
-                ajustar_a_menor(c_d, var_root); ajustar_a_menor(c_e, var_root)
+                ajustar_a_menor(c_d, var_root)
+                ajustar_a_menor(c_e, var_root)
             # Inserir armadura de canvi
-            c_d.insert(0, copy.deepcopy(arm_var)); c_e.insert(0, copy.deepcopy(arm_var))
+            c_d.insert(0, copy.deepcopy(arm_var))
+            c_e.insert(0, copy.deepcopy(arm_var))
         else:
             # Inserir armadura original
-            c_d.insert(0, copy.deepcopy(arm_v7)); c_e.insert(0, copy.deepcopy(arm_v7))
+            c_d.insert(0, copy.deepcopy(arm_v7))
+            c_e.insert(0, copy.deepcopy(arm_v7))
 
         if i == 0:
-            c_d.insert(0, clef.TrebleClef()); c_e.insert(0, clef.BassClef())
-        if i == 2: c_d.insert(0, layout.SystemLayout(isNew=True))
-        if i == 3: c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
+            c_d.insert(0, clef.TrebleClef())
+            c_e.insert(0, clef.BassClef())
+            c_d.insert(0, meter.TimeSignature('4/4'))
+            c_e.insert(0, meter.TimeSignature('4/4'))
+            
+        if i == 2: 
+            c_d.insert(0, layout.SystemLayout(isNew=True))
+            
+        if i == 3: 
+            c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
 
-        p_d.append(c_d); p_e.append(c_e)
+        p_d.append(c_d)
+        p_e.append(c_e)
     
     grup = layout.StaffGroup([p_d, p_e], symbol='brace', barTogether=True)
     score_out.insert(0, p_d); score_out.insert(0, p_e); score_out.insert(0, grup)
