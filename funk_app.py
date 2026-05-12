@@ -18,7 +18,7 @@ if 'xml_data' not in st.session_state:
     st.session_state.xml_data = None
     st.session_state.score_generat = False
 
-FITXER_BASE = 'patrons funk.xml'
+FITXER_BASE = 'patrons funk.musicxml'
 
 if not os.path.exists(FITXER_BASE):
     st.error(f"⚠️ NO S'HA TROBAT EL FITXER: '{FITXER_BASE}'")
