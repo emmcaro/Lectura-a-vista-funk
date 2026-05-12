@@ -60,11 +60,19 @@ def generar_estudi_final():
     
     for m in all_measures:
         m_rh, m_lh = stream.Measure(), stream.Measure()
-        for n in m.notesAndRests:
-            staff_val = getattr(n, 'staff', 1) 
-            if staff_val == 1:
-                m_rh.insert(n.offset, copy.deepcopy(n))
-            elif staff_val == 2:
+        
+        # Utilitzem flatten() per extreure les notes que estiguin amagades dins de "Voices" (com passa a Logic Pro)
+        for n in m.flatten().notesAndRests:
+            # Obtenim l'staff de manera segura
+            staff_val = getattr(n, 'staff', None)
+            
+            # Si és un acord i no té staff a nivell global, mirem la seva primera nota
+            if staff_val is None and n.isChord and len(n.notes) > 0:
+                staff_val = getattr(n.notes[0], 'staff', 1)
+            elif staff_val is None:
+                staff_val = 1 # Per defecte mà dreta
+                
+            if staff_val == 2:
                 m_lh.insert(n.offset, copy.deepcopy(n))
             else:
                 m_rh.insert(n.offset, copy.deepcopy(n))
@@ -109,8 +117,6 @@ def generar_estudi_final():
 def mostrar_partitura(xml_bytes):
     xml_str = xml_bytes.decode('utf-8')
     xml_escapat = json.dumps(xml_str)
-    
-    # Afegim un div amb fons blanc (background-color: white) i vores rodones
     html_code = f"""
     <div style="background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);">
         <div id="osmdCanvas"></div>
