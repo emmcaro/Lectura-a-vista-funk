@@ -7,8 +7,8 @@ import copy
 import warnings
 from music21 import *
 
-# Configuració per evitar que music21 busqui programes externs al servidor
-environment.set('musicxmlDirectives', 'no-playback')
+# ELIMINEM la línia de environment.set que donava l'error.
+# No és necessària per a una aplicació web que només genera XML.
 
 warnings.filterwarnings("ignore")
 
@@ -22,15 +22,12 @@ if 'xml_data' not in st.session_state:
     st.session_state.score_generat = False
 
 # --- 2. COMPROVACIÓ DEL FITXER ---
-# Aquesta part és vital: si el fitxer no es diu EXACTAMENT així, l'app t'ho avisarà
 FITXER_BASE = 'patrons funk.xml'
 
 if not os.path.exists(FITXER_BASE):
     st.error(f"⚠️ NO S'HA TROBAT EL FITXER: '{FITXER_BASE}'")
-    st.info("Assegura't que el fitxer XML està a la mateixa carpeta que aquest script de Python.")
-    st.stop() # Atura l'execució fins que el fitxer hi sigui
-else:
-    st.success(f"✅ Fitxer base '{FITXER_BASE}' detectat correctament.")
+    st.info("Puja el fitxer al teu repositori de GitHub o a la mateixa carpeta on tens l'app.")
+    st.stop() 
 
 # --- 3. LÒGICA HARMÒNICA ---
 
@@ -64,6 +61,7 @@ def ajustar_a_especie(pitch_obj, arrel_nom, especie):
 # --- 4. FUNCIÓ DE GENERACIÓ ---
 
 def generar_estudi_final():
+    # Carreguem el fitxer XML
     score_in = converter.parse(FITXER_BASE)
     part_in = score_in.getElementsByClass(stream.Part)[0]
     all_measures = list(part_in.getElementsByClass(stream.Measure))
@@ -133,21 +131,22 @@ def mostrar_partitura(xml_bytes):
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    # EL BOTÓ HA DE SORTIR AQUÍ
     if st.button('🚀 Generar Nova Lectura Funk', use_container_width=True):
         with st.spinner('Treballant...'):
             try:
                 nou_score = generar_estudi_final()
+                # Escrivim a MusicXML i llegim les dades
                 xml_path = nou_score.write('musicxml')
                 with open(xml_path, 'rb') as f:
                     st.session_state.xml_data = f.read()
                 st.session_state.score_generat = True
-                os.remove(xml_path)
+                if os.path.exists(xml_path):
+                    os.remove(xml_path)
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error detallat: {e}")
 
 if st.session_state.score_generat:
     with col2:
-        st.download_button("📥 Descarregar MusicXML", st.session_state.xml_data, "Funk.musicxml", use_container_width=True)
+        st.download_button("📥 Descarregar MusicXML", st.session_state.xml_data, "Funk_Exercici.musicxml", use_container_width=True)
     st.divider()
     mostrar_partitura(st.session_state.xml_data)
