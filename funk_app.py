@@ -10,26 +10,22 @@ from music21 import *
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURACIÓ ---
-st.set_page_config(page_title="Generador de Funk Harmònic", layout="wide")
-st.title("🎸 Generador de Funk: Progressió V7 - Var")
-st.write("M1 i M3: V7 | M2 i M4: Variació (VI, bVI7 o I7). Canvis d'armadura automàtics.")
+st.set_page_config(page_title="Generador de Funk", layout="wide")
+st.title("🎸 Generador de Funk")
 
-# --- INICIALITZACIÓ ROBUSTA DE L'ESTAT ---
-if 'xml_data' not in st.session_state:
-    st.session_state.xml_data = None
-if 'score_generat' not in st.session_state:
-    st.session_state.score_generat = False
-if 'tonalitat' not in st.session_state:
-    st.session_state.tonalitat = None
-if 'variacio_nom' not in st.session_state:
-    st.session_state.variacio_nom = ""
+# --- INICIALITZACIÓ COMPLETA DE L'ESTAT ---
+variables_estat = ['xml_data', 'score_generat', 'tonalitat', 'variacio_nom']
+for var in variables_estat:
+    if var not in st.session_state:
+        st.session_state[var] = None if var != 'score_generat' else False
+        if var == 'variacio_nom': st.session_state[var] = ""
 
-FITXER_BASE = 'patrons funk.musicxml'
+FITXER_BASE = 'patrons funk.xml' # Prioritzem el format .xml que tens pujat
 if not os.path.exists(FITXER_BASE):
-    if os.path.exists('patrons funk.xml'):
-        FITXER_BASE = 'patrons funk.xml'
+    if os.path.exists('patrons funk.musicxml'):
+        FITXER_BASE = 'patrons funk.musicxml'
     else:
-        st.error(f"⚠️ NO S'HA TROBAT EL FITXER: '{FITXER_BASE}'")
+        st.error(f"⚠️ No s'ha trobat el fitxer base.")
         st.stop()
 
 # --- LÒGICA HARMÒNICA ---
@@ -40,11 +36,10 @@ def obtenir_tonalitat_aleatoria():
     return random.choices(tonalitats, weights=pesos, k=1)[0]
 
 def ajustar_a_menor(measure, root_pitch):
-    """Converteix un patró dominant en menor baixant la 3a un semitò."""
+    """Baixa la 3a un semitó per convertir dominant en menor."""
     for el in measure.flatten().notes:
         pitches = el.pitches if el.isChord else [el.pitch]
         for p in pitches:
-            # Si la nota és una 3a Major respecte a la fonamental (4 semitons)
             if (p.pitchClass - root_pitch.pitchClass) % 12 == 4:
                 p.transpose(-1, inPlace=True)
 
@@ -53,28 +48,33 @@ def generar_estudi_final():
     parts_in = list(score_in.parts)
     patrons_dreta, patrons_esquerra = [], []
 
-    # 1. Extracció de patrons
-    all_m = list(parts_in[0].getElementsByClass(stream.Measure))
-    for m in all_m:
-        m_rh, m_lh = stream.Measure(), stream.Measure()
-        for n in m.flatten().notesAndRests:
-            staff_val = getattr(n, 'staff', 1)
-            # Detecció robusta per si Logic Pro amaga el staff als acords
-            if staff_val is None and n.isChord:
-                try: staff_val = n.notes[0].staff
-                except: staff_val = 1
+    # 1. Extracció robusta de mans (Doble pista o Staff ID)
+    if len(parts_in) >= 2:
+        # Cas 1: El fitxer té dues mans en pistes separades
+        mesures_d = list(parts_in[0].getElementsByClass(stream.Measure))
+        mesures_e = list(parts_in[1].getElementsByClass(stream.Measure))
+        for md, me in zip(mesures_d, mesures_e):
+            patrons_dreta.append(copy.deepcopy(md))
+            patrons_esquerra.append(copy.deepcopy(me))
+    else:
+        # Cas 2: Tot en una pista, detectem per atribut 'staff'
+        for m in parts_in[0].getElementsByClass(stream.Measure):
+            m_rh, m_lh = stream.Measure(), stream.Measure()
+            for n in m.flatten().notesAndRests:
+                staff_val = getattr(n, 'staff', 1)
+                if staff_val is None and n.isChord:
+                    try: staff_val = n.notes[0].staff
+                    except: staff_val = 1
                 
-            if staff_val == 2: m_lh.insert(n.offset, copy.deepcopy(n))
-            else: m_rh.insert(n.offset, copy.deepcopy(n))
-        patrons_dreta.append(m_rh); patrons_esquerra.append(m_lh)
+                if staff_val == 2: m_lh.insert(n.offset, copy.deepcopy(n))
+                else: m_rh.insert(n.offset, copy.deepcopy(n))
+            patrons_dreta.append(m_rh); patrons_esquerra.append(m_lh)
 
     # 2. Selecció de tonalitats
     v7_root_name = obtenir_tonalitat_aleatoria()
     v7_root = pitch.Pitch(v7_root_name)
     
-    # Triem la variació per als compassos 2 i 4
     tipus_var = random.choice(['VI', 'bVI7', 'I7'])
-    
     if tipus_var == 'VI':
         var_root = v7_root.transpose('M2')
         var_nom = f"{var_root.name}m7"
@@ -88,18 +88,10 @@ def generar_estudi_final():
         var_nom = f"{var_root.name}7"
         is_minor = False
 
-    # Armadures (Mixolídies: 4a justa amunt de la fonamental)
-    arm_v7 = key.KeySignature(key.Key(v7_root.transpose('P4').name).sharps)
-    
-    if is_minor: 
-        # Si és menor (ex: Am7), busquem l'armadura natural (G major/E menor -> 1 sostingut, però com a "Dòric" o "Eòlic")
-        # En jazz, el VIm7 sol portar la mateixa armadura que la tonalitat central (Mixolídia del V = Jònica del I)
-        arm_var = key.KeySignature(key.Key(v7_root.transpose('P4').name).sharps)
-    else:
-        # Si és dominant (bVI7 o I7), busquem la seva pròpia 4a justa amunt
-        arm_var = key.KeySignature(key.Key(var_root.transpose('P4').name).sharps)
+    # Armadura fixa (Mixolídia del V7 inicial)
+    armadura_inicial = key.KeySignature(key.Key(v7_root.transpose('P4').name).sharps)
 
-    # 3. Muntatge (AA BB)
+    # 3. Muntatge
     score_out = stream.Score()
     p_d, p_e = stream.Part(), stream.Part()
     
@@ -112,46 +104,31 @@ def generar_estudi_final():
         c_e = copy.deepcopy(patrons_esquerra[idx])
         c_d.number = c_e.number = i + 1
         
-        # Neteja de signatures prèvies per evitar duplicitats
+        # Neteja de signatures del fitxer base
         for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout']:
-            c_d.removeByClass(cl)
-            c_e.removeByClass(cl)
+            c_d.removeByClass(cl); c_e.removeByClass(cl)
         
-        # Transport base (de C a V7)
-        itvl_v7 = interval.Interval(pitch.Pitch('C'), v7_root)
-        c_d.transpose(itvl_v7, inPlace=True)
-        c_e.transpose(itvl_v7, inPlace=True)
+        # Transport a l'acord base (V7)
+        itvl_base = interval.Interval(pitch.Pitch('C'), v7_root)
+        c_d.transpose(itvl_base, inPlace=True); c_e.transpose(itvl_base, inPlace=True)
 
-        # Aplicar variació si és compàs parell (2 o 4)
+        # Si és compàs parell, apliquem la variació harmònica
         if i % 2 != 0:
             itvl_var = interval.Interval(v7_root, var_root)
-            c_d.transpose(itvl_var, inPlace=True)
-            c_e.transpose(itvl_var, inPlace=True)
+            c_d.transpose(itvl_var, inPlace=True); c_e.transpose(itvl_var, inPlace=True)
             if is_minor:
-                ajustar_a_menor(c_d, var_root)
-                ajustar_a_menor(c_e, var_root)
-            # Inserir armadura de canvi
-            c_d.insert(0, copy.deepcopy(arm_var))
-            c_e.insert(0, copy.deepcopy(arm_var))
-        else:
-            # Inserir armadura original
-            c_d.insert(0, copy.deepcopy(arm_v7))
-            c_e.insert(0, copy.deepcopy(arm_v7))
+                ajustar_a_menor(c_d, var_root); ajustar_a_menor(c_e, var_root)
 
+        # Inserim armadura, clau i compàs només al primer compàs (sense canvis visuals després)
         if i == 0:
-            c_d.insert(0, clef.TrebleClef())
-            c_e.insert(0, clef.BassClef())
-            c_d.insert(0, meter.TimeSignature('4/4'))
-            c_e.insert(0, meter.TimeSignature('4/4'))
+            c_d.insert(0, copy.deepcopy(armadura_inicial)); c_e.insert(0, copy.deepcopy(armadura_inicial))
+            c_d.insert(0, clef.TrebleClef()); c_e.insert(0, clef.BassClef())
+            c_d.insert(0, meter.TimeSignature('4/4')); c_e.insert(0, meter.TimeSignature('4/4'))
             
-        if i == 2: 
-            c_d.insert(0, layout.SystemLayout(isNew=True))
-            
-        if i == 3: 
-            c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
+        if i == 2: c_d.insert(0, layout.SystemLayout(isNew=True))
+        if i == 3: c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
 
-        p_d.append(c_d)
-        p_e.append(c_e)
+        p_d.append(c_d); p_e.append(c_e)
     
     grup = layout.StaffGroup([p_d, p_e], symbol='brace', barTogether=True)
     score_out.insert(0, p_d); score_out.insert(0, p_e); score_out.insert(0, grup)
@@ -178,7 +155,7 @@ def mostrar_partitura(xml_bytes):
 # --- INTERFÍCIE ---
 col1, col2 = st.columns([1, 1])
 with col1:
-    if st.button('🚀 Generar Groove Harmònic', use_container_width=True):
+    if st.button('🚀 Generar Exercici', use_container_width=True):
         try:
             nou_score, v7_nom, var_nom = generar_estudi_final()
             st.session_state.tonalitat = v7_nom
@@ -192,8 +169,7 @@ with col1:
             st.error(f"Error: {e}")
 
 if st.session_state.score_generat:
-    st.info(f"Progressió: **{st.session_state.tonalitat}** → **{st.session_state.variacio_nom}**")
     with col2:
-        st.download_button(f"📥 Descarregar MusicXML", st.session_state.xml_data, f"Funk_Prog.musicxml", use_container_width=True)
+        st.download_button(f"📥 Baixar MusicXML ({st.session_state.tonalitat})", st.session_state.xml_data, f"Funk.musicxml", use_container_width=True)
     st.divider()
     mostrar_partitura(st.session_state.xml_data)
