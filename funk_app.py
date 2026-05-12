@@ -53,7 +53,6 @@ def ajustar_a_especie(pitch_obj, arrel_nom, especie):
 
 def generar_estudi_final():
     score_in = converter.parse(FITXER_BASE)
-    # Busquem la part (normalment només n'hi ha una al fitxer que has pujat)
     part_in = score_in.getElementsByClass(stream.Part)[0]
     all_measures = list(part_in.getElementsByClass(stream.Measure))
     
@@ -61,18 +60,13 @@ def generar_estudi_final():
     
     for m in all_measures:
         m_rh, m_lh = stream.Measure(), stream.Measure()
-        # Mètode segur per separar staff 1 i 2:
         for n in m.notesAndRests:
-            # Intentem obtenir el número de pentagrama (staff)
-            # Si no existeix per defecte, music21 sol posar-ho a None o 1
             staff_val = getattr(n, 'staff', 1) 
-            
             if staff_val == 1:
                 m_rh.insert(n.offset, copy.deepcopy(n))
             elif staff_val == 2:
                 m_lh.insert(n.offset, copy.deepcopy(n))
             else:
-                # Per si de cas el fitxer usa una lògica diferent
                 m_rh.insert(n.offset, copy.deepcopy(n))
                 
         patrons_dreta.append(m_rh)
@@ -95,7 +89,6 @@ def generar_estudi_final():
                 if el.isNote: ajustar_a_especie(el.pitch, arrel, especie)
                 elif el.isChord:
                     for p in el.pitches: ajustar_a_especie(p, arrel, especie)
-            # Netegem formats antics
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout']:
                 c.removeByClass(cl)
 
@@ -116,8 +109,12 @@ def generar_estudi_final():
 def mostrar_partitura(xml_bytes):
     xml_str = xml_bytes.decode('utf-8')
     xml_escapat = json.dumps(xml_str)
+    
+    # Afegim un div amb fons blanc (background-color: white) i vores rodones
     html_code = f"""
-    <div id="osmdCanvas"></div>
+    <div style="background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);">
+        <div id="osmdCanvas"></div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.8/build/opensheetmusicdisplay.min.js"></script>
     <script>
       var osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("osmdCanvas", {{
@@ -127,7 +124,7 @@ def mostrar_partitura(xml_bytes):
       osmd.load({xml_escapat}).then(function() {{ osmd.render(); }});
     </script>
     """
-    components.html(html_code, height=600, scrolling=True)
+    components.html(html_code, height=650, scrolling=True)
 
 # --- UI ---
 col1, col2 = st.columns([1, 1])
