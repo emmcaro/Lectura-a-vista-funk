@@ -7,77 +7,80 @@ import copy
 import warnings
 from music21 import *
 
-# ELIMINEM la línia de environment.set que donava l'error.
-# No és necessària per a una aplicació web que només genera XML.
-
 warnings.filterwarnings("ignore")
 
-# --- 1. CONFIGURACIÓ DE PÀGINA ---
+# --- CONFIGURACIÓ ---
 st.set_page_config(page_title="Generador de Funk", layout="wide")
 st.title("🎸 Generador de Funk: Bucles Harmònics")
 
-# Inicialitzem l'estat si no existeix
 if 'xml_data' not in st.session_state:
     st.session_state.xml_data = None
     st.session_state.score_generat = False
 
-# --- 2. COMPROVACIÓ DEL FITXER ---
 FITXER_BASE = 'patrons funk.xml'
 
 if not os.path.exists(FITXER_BASE):
     st.error(f"⚠️ NO S'HA TROBAT EL FITXER: '{FITXER_BASE}'")
-    st.info("Puja el fitxer al teu repositori de GitHub o a la mateixa carpeta on tens l'app.")
-    st.stop() 
+    st.stop()
 
-# --- 3. LÒGICA HARMÒNICA ---
+# --- LÒGICA HARMÒNICA ---
 
 def generar_progressio_custom():
     roots_base = ['C', 'F', 'G', 'Bb', 'Eb', 'D', 'A']
     progressio = []
     arrel_actual = pitch.Pitch(random.choice(roots_base))
-    
     for _ in range(4):
         especie_bucle = random.choice([('m7', '7'), ('7', '7')])
         relacio = random.choice(['4J', 'C+', 'C-'])
-        
-        if relacio == '4J': interval_rel = interval.Interval('P4')
-        elif relacio == 'C+': interval_rel = interval.Interval('m2')
-        else: interval_rel = interval.Interval('m2').reverse()
-            
-        arrel_2 = arrel_actual.transpose(interval_rel)
+        if relacio == '4J': itvl = interval.Interval('P4')
+        elif relacio == 'C+': itvl = interval.Interval('m2')
+        else: itvl = interval.Interval('m2').reverse()
+        arrel_2 = arrel_actual.transpose(itvl)
         progressio.append({'root': arrel_actual.name, 'especie': especie_bucle[0]})
         progressio.append({'root': arrel_2.name, 'especie': especie_bucle[1]})
         arrel_actual = pitch.Pitch(random.choice(roots_base))
     return progressio
 
 def ajustar_a_especie(pitch_obj, arrel_nom, especie):
-    arrel_pitch = pitch.Pitch(arrel_nom)
-    itvl = interval.Interval(arrel_pitch, pitch_obj)
+    arrel_p = pitch.Pitch(arrel_nom)
+    itvl = interval.Interval(arrel_p, pitch_obj)
     semitons = itvl.semitones % 12
     if especie == 'm7' and semitons == 4: pitch_obj.transpose(-1, inPlace=True)
     elif especie == '7' and semitons == 3: pitch_obj.transpose(1, inPlace=True)
     if semitons == 11: pitch_obj.transpose(-1, inPlace=True)
 
-# --- 4. FUNCIÓ DE GENERACIÓ ---
+# --- GENERACIÓ DE SCORE ---
 
 def generar_estudi_final():
-    # Carreguem el fitxer XML
     score_in = converter.parse(FITXER_BASE)
+    # Busquem la part (normalment només n'hi ha una al fitxer que has pujat)
     part_in = score_in.getElementsByClass(stream.Part)[0]
     all_measures = list(part_in.getElementsByClass(stream.Measure))
     
     patrons_dreta, patrons_esquerra = [], []
+    
     for m in all_measures:
         m_rh, m_lh = stream.Measure(), stream.Measure()
-        for el in m.flatten().notesAndRests:
-            if el.staff == 1: m_rh.insert(el.offset, copy.deepcopy(el))
-            elif el.staff == 2: m_lh.insert(el.offset, copy.deepcopy(el))
+        # Mètode segur per separar staff 1 i 2:
+        for n in m.notesAndRests:
+            # Intentem obtenir el número de pentagrama (staff)
+            # Si no existeix per defecte, music21 sol posar-ho a None o 1
+            staff_val = getattr(n, 'staff', 1) 
+            
+            if staff_val == 1:
+                m_rh.insert(n.offset, copy.deepcopy(n))
+            elif staff_val == 2:
+                m_lh.insert(n.offset, copy.deepcopy(n))
+            else:
+                # Per si de cas el fitxer usa una lògica diferent
+                m_rh.insert(n.offset, copy.deepcopy(n))
+                
         patrons_dreta.append(m_rh)
         patrons_esquerra.append(m_lh)
     
     progressio = generar_progressio_custom()
     score_out = stream.Score()
-    part_d, part_e = stream.Part(), stream.Part()
+    p_d, p_e = stream.Part(), stream.Part()
     
     for i, dada in enumerate(progressio):
         arrel, especie = dada['root'], dada['especie']
@@ -88,10 +91,11 @@ def generar_estudi_final():
         itvl_base = interval.Interval(pitch.Pitch('C4'), pitch.Pitch(arrel + '4'))
         for c in [c_d, c_e]:
             c.transpose(itvl_base, inPlace=True)
-            for n in c.flatten().notes:
-                if n.isNote: ajustar_a_especie(n.pitch, arrel, especie)
-                elif n.isChord:
-                    for p in n.pitches: ajustar_a_especie(p, arrel, especie)
+            for el in c.flatten().notes:
+                if el.isNote: ajustar_a_especie(el.pitch, arrel, especie)
+                elif el.isChord:
+                    for p in el.pitches: ajustar_a_especie(p, arrel, especie)
+            # Netegem formats antics
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout']:
                 c.removeByClass(cl)
 
@@ -100,14 +104,13 @@ def generar_estudi_final():
             c_e.insert(0, clef.BassClef()); c_e.insert(0, meter.TimeSignature('4/4'))
         if i == 4: c_d.insert(0, layout.SystemLayout(isNew=True))
         if i == 7:
-            c_d.rightBarline = bar.Barline('final')
-            c_e.rightBarline = bar.Barline('final')
+            c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
 
-        part_d.append(c_d)
-        part_e.append(c_e)
+        p_d.append(c_d)
+        p_e.append(c_e)
         
-    grup = layout.StaffGroup([part_d, part_e], symbol='brace', barTogether=True)
-    score_out.insert(0, part_d); score_out.insert(0, part_e); score_out.insert(0, grup)
+    grup = layout.StaffGroup([p_d, p_e], symbol='brace', barTogether=True)
+    score_out.insert(0, p_d); score_out.insert(0, p_e); score_out.insert(0, grup)
     return score_out
 
 def mostrar_partitura(xml_bytes):
@@ -126,27 +129,23 @@ def mostrar_partitura(xml_bytes):
     """
     components.html(html_code, height=600, scrolling=True)
 
-# --- 5. INTERFÍCIE D'USUARI ---
-
+# --- UI ---
 col1, col2 = st.columns([1, 1])
-
 with col1:
     if st.button('🚀 Generar Nova Lectura Funk', use_container_width=True):
-        with st.spinner('Treballant...'):
+        with st.spinner('Generant...'):
             try:
                 nou_score = generar_estudi_final()
-                # Escrivim a MusicXML i llegim les dades
                 xml_path = nou_score.write('musicxml')
                 with open(xml_path, 'rb') as f:
                     st.session_state.xml_data = f.read()
                 st.session_state.score_generat = True
-                if os.path.exists(xml_path):
-                    os.remove(xml_path)
+                os.remove(xml_path)
             except Exception as e:
-                st.error(f"Error detallat: {e}")
+                st.error(f"Error: {e}")
 
 if st.session_state.score_generat:
     with col2:
-        st.download_button("📥 Descarregar MusicXML", st.session_state.xml_data, "Funk_Exercici.musicxml", use_container_width=True)
+        st.download_button("📥 Descarregar MusicXML", st.session_state.xml_data, "Funk.musicxml", use_container_width=True)
     st.divider()
     mostrar_partitura(st.session_state.xml_data)
