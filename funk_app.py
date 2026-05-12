@@ -14,9 +14,11 @@ st.set_page_config(page_title="Generador de Funk (Transposició)", layout="wide"
 st.title("🎸 Generador de Funk: Transport i Armadures")
 st.write("Estructura AA BB en una tonalitat aleatòria (prioritzant les fàcils) amb armadura correcta.")
 
+# --- INICIALITZACIÓ DE L'ESTAT --- (Aquí estava l'error!)
 if 'xml_data' not in st.session_state:
     st.session_state.xml_data = None
     st.session_state.score_generat = False
+    st.session_state.tonalitat = None  # <--- CORRECCIÓ AFEGIDA AQUÍ
 
 FITXER_BASE = 'patrons funk.musicxml'
 if not os.path.exists(FITXER_BASE):
@@ -30,7 +32,6 @@ if not os.path.exists(FITXER_BASE):
 
 def obtenir_tonalitat_aleatoria():
     # Definim les tonalitats i el seu pes (més alt = més probable)
-    # Basat en el nombre d'alteracions (C=0, G/F=1, D/Bb=2, etc.)
     opcions = [
         ('C', 10),  # 0 alteracions
         ('G', 8), ('F', 8),  # 1 alteració
@@ -96,9 +97,9 @@ def generar_estudi_final():
             # TRANSPOSAR EL COMPÀS
             c.transpose(itvl, inPlace=True)
             
-            # Forçar que les notes s'ajustin a l'armadura (evitar molts accidentals si no calen)
+            # Forçar que les notes s'ajustin a l'armadura
             for n in c.flatten().notes:
-                n.step = n.step # Refresca la representació interna
+                n.step = n.step
 
         # Configuració inicial (Compàs 1)
         if i == 0:
@@ -148,7 +149,7 @@ with col1:
         with st.spinner('Transposant i calculant armadura...'):
             try:
                 nou_score, nota_triada = generar_estudi_final()
-                st.session_state.tonalitat = nota_triada
+                st.session_state.tonalitat = nota_triada  # Guardem la nota a l'estat
                 xml_path = nou_score.write('musicxml')
                 with open(xml_path, 'rb') as f:
                     st.session_state.xml_data = f.read()
@@ -157,7 +158,7 @@ with col1:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-if st.session_state.score_generat:
+if st.session_state.score_generat and st.session_state.tonalitat is not None:
     st.info(f"Tonalitat actual: **{st.session_state.tonalitat}**")
     with col2:
         st.download_button(f"📥 Baixar en {st.session_state.tonalitat}", st.session_state.xml_data, f"Funk_{st.session_state.tonalitat}.musicxml", use_container_width=True)
