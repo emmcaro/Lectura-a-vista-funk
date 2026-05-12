@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore")
 # --- CONFIGURACIÓ ---
 st.set_page_config(page_title="Generador de Funk (Mixolidi)", layout="wide")
 st.title("🎸 Generador de Funk: Lògica de Dominants")
-st.write("Estructura AA BB. L'armadura es calcula com a V7 de la tonalitat de destí.")
+st.write("Estructura AA BB. L'armadura correspon al mode Mixolidi (V7 de la tonalitat de destí).")
 
 # INICIALITZACIÓ
 if 'xml_data' not in st.session_state:
@@ -67,15 +67,17 @@ def generar_estudi_final():
             patrons_dreta.append(m_rh); patrons_esquerra.append(m_lh)
     
     # 2. Tonalitat del Groove i Tonalitat de l'Armadura
-    tonalitat_groove = obtenir_tonalitat_aleatoria() # Ex: 'G' (per a un G7)
+    tonalitat_groove = obtenir_tonalitat_aleatoria()
     
-    # Calcul d'interval des de Do (base del fitxer) fins a la nova fonamental
-    itvl = interval.Interval(pitch.Pitch('C'), pitch.Pitch(tonalitat_groove))
+    # Calculem l'interval més curt perquè no salti una octava sencera amunt o avall
+    semitons = (pitch.Pitch(tonalitat_groove + '4').ps - pitch.Pitch('C4').ps) % 12
+    if semitons > 6:
+        semitons -= 12  # Si puja més d'una 4a Aug, millor que baixi
+    itvl = interval.Interval(semitons)
     
-    # LÒGICA DEMANADA: L'armadura és la de la tonalitat que resoldria (una 4a justa amunt)
-    # Si el groove és G7, l'armadura és de Do Major (G -> C)
-    tonalitat_resolucio = key.Key(tonalitat_groove).transpose('P4')
-    armadura = key.KeySignature(tonalitat_resolucio.sharps)
+    # L'armadura de Mixolidi és la d'una 4a Justa per sobre de la fonamental
+    p_resolucio = pitch.Pitch(tonalitat_groove).transpose('P4')
+    armadura = key.KeySignature(key.Key(p_resolucio.name).sharps)
 
     # 3. Muntatge
     score_out = stream.Score()
@@ -91,23 +93,17 @@ def generar_estudi_final():
         c_d.number = c_e.number = i + 1
         
         for c in [c_d, c_e]:
+            # Neteja prèvia de formats
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout']:
                 c.removeByClass(cl)
             
-            # Transportem les notes
+            # Transportem la música de forma segura (ARA SÍ, SENSE TREURE ELS ACCIDENTALS)
             c.transpose(itvl, inPlace=True)
-            
-            # Netegem accidentals perquè l'armadura agafi el control
-            for el in c.flatten().notes:
-                if el.isNote:
-                    el.pitch.accidental = None 
-                elif el.isChord:
-                    for p in el.pitches:
-                        p.accidental = None
 
         if i == 0:
             c_d.insert(0, clef.TrebleClef()); c_e.insert(0, clef.BassClef())
             c_d.insert(0, meter.TimeSignature('4/4')); c_e.insert(0, meter.TimeSignature('4/4'))
+            # Inserim l'armadura correcta per al Mixolidi
             c_d.insert(0, copy.deepcopy(armadura)); c_e.insert(0, copy.deepcopy(armadura))
             
         if i == 2: c_d.insert(0, layout.SystemLayout(isNew=True))
@@ -141,7 +137,7 @@ def mostrar_partitura(xml_bytes):
 col1, col2 = st.columns([1, 1])
 with col1:
     if st.button('🚀 Generar Exercici Funk 7th', use_container_width=True):
-        with st.spinner('Calculant transport Mixolidi...'):
+        with st.spinner('Transportant i ajustant armadura...'):
             try:
                 nou_score, nota_triada = generar_estudi_final()
                 st.session_state.tonalitat = nota_triada  
