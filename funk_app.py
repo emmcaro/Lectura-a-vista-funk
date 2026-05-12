@@ -14,11 +14,11 @@ st.set_page_config(page_title="Generador de Funk (Transposició)", layout="wide"
 st.title("🎸 Generador de Funk: Transport i Armadures")
 st.write("Estructura AA BB en una tonalitat aleatòria (prioritzant les fàcils) amb armadura correcta.")
 
-# --- INICIALITZACIÓ DE L'ESTAT --- (Aquí estava l'error!)
+# INICIALITZACIÓ DE VARIABLES (Evita l'error de recàrrega de pàgina)
 if 'xml_data' not in st.session_state:
     st.session_state.xml_data = None
     st.session_state.score_generat = False
-    st.session_state.tonalitat = None  # <--- CORRECCIÓ AFEGIDA AQUÍ
+    st.session_state.tonalitat = None  
 
 FITXER_BASE = 'patrons funk.musicxml'
 if not os.path.exists(FITXER_BASE):
@@ -53,7 +53,7 @@ def generar_estudi_final():
     patrons_dreta = []
     patrons_esquerra = []
     
-    # 1. Extracció de patrons
+    # 1. Extracció de patrons amb DETECCIÓ ROBUSTA DE MÀ ESQUERRA
     if len(parts_in) >= 2:
         mesures_d = list(parts_in[0].getElementsByClass(stream.Measure))
         mesures_e = list(parts_in[1].getElementsByClass(stream.Measure))
@@ -65,9 +65,22 @@ def generar_estudi_final():
         for m in all_measures:
             m_rh, m_lh = stream.Measure(), stream.Measure()
             for n in m.flatten().notesAndRests:
-                staff_val = getattr(n, 'staff', 1)
-                if staff_val == 2: m_lh.insert(n.offset, copy.deepcopy(n))
-                else: m_rh.insert(n.offset, copy.deepcopy(n))
+                # Detecció per a notes normals i per acords de Logic Pro
+                staff_val = getattr(n, 'staff', None)
+                if staff_val is None and n.isChord:
+                    try:
+                        staff_val = n.notes[0].staff
+                    except:
+                        staff_val = 1
+                if staff_val is None:
+                    staff_val = 1
+                
+                # Assignem al pentagrama correcte
+                if staff_val == 2: 
+                    m_lh.insert(n.offset, copy.deepcopy(n))
+                else: 
+                    m_rh.insert(n.offset, copy.deepcopy(n))
+                    
             patrons_dreta.append(m_rh)
             patrons_esquerra.append(m_lh)
     
@@ -97,9 +110,13 @@ def generar_estudi_final():
             # TRANSPOSAR EL COMPÀS
             c.transpose(itvl, inPlace=True)
             
-            # Forçar que les notes s'ajustin a l'armadura
-            for n in c.flatten().notes:
-                n.step = n.step
+            # Forçar que les notes s'ajustin a l'armadura (CORRECCIÓ D'ACORDS)
+            for el in c.flatten().notes:
+                if el.isNote:
+                    el.pitch.step = el.pitch.step
+                elif el.isChord:
+                    for p in el.pitches:
+                        p.step = p.step
 
         # Configuració inicial (Compàs 1)
         if i == 0:
@@ -111,9 +128,11 @@ def generar_estudi_final():
             c_d.insert(0, copy.deepcopy(armadura))
             c_e.insert(0, copy.deepcopy(armadura))
             
+        # Salt de sistema
         if i == 2: 
             c_d.insert(0, layout.SystemLayout(isNew=True))
             
+        # Doble barra final
         if i == 3:
             c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
 
@@ -149,7 +168,7 @@ with col1:
         with st.spinner('Transposant i calculant armadura...'):
             try:
                 nou_score, nota_triada = generar_estudi_final()
-                st.session_state.tonalitat = nota_triada  # Guardem la nota a l'estat
+                st.session_state.tonalitat = nota_triada  
                 xml_path = nou_score.write('musicxml')
                 with open(xml_path, 'rb') as f:
                     st.session_state.xml_data = f.read()
