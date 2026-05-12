@@ -10,9 +10,9 @@ from music21 import *
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURACIÓ ---
-st.set_page_config(page_title="Generador de Funk (C7)", layout="wide")
-st.title("🎸 Generador de Funk: Groove en C7")
-st.write("Genera 8 compassos aleatoris (mà dreta i esquerra) basats en la teva base de dades.")
+st.set_page_config(page_title="Generador de Funk (AA-BB)", layout="wide")
+st.title("🎸 Generador de Funk: Estructura AA BB")
+st.write("Generació de 4 compassos: [Compàs 1 = 2] i [Compàs 3 = 4]. Dos compassos per sistema.")
 
 if 'xml_data' not in st.session_state:
     st.session_state.xml_data = None
@@ -35,17 +35,13 @@ def generar_estudi_final():
     patrons_dreta = []
     patrons_esquerra = []
     
-    # CAS A: Music21 ja ha separat la clau de Sol i la clau de Fa (Molt comú amb Logic Pro)
+    # Extracció de patrons (Cas A: ja separat / Cas B: tot junt)
     if len(parts_in) >= 2:
         mesures_d = list(parts_in[0].getElementsByClass(stream.Measure))
         mesures_e = list(parts_in[1].getElementsByClass(stream.Measure))
-        
-        # Emparellem els compassos de la dreta amb la esquerra
         for md, me in zip(mesures_d, mesures_e):
             patrons_dreta.append(copy.deepcopy(md))
             patrons_esquerra.append(copy.deepcopy(me))
-            
-    # CAS B: Està tot junt en una sola part i ho hem de separar manualment
     else:
         all_measures = list(parts_in[0].getElementsByClass(stream.Measure))
         for m in all_measures:
@@ -54,39 +50,42 @@ def generar_estudi_final():
                 staff_val = getattr(n, 'staff', None)
                 if staff_val is None and n.isChord and len(n.notes) > 0:
                     staff_val = getattr(n.notes[0], 'staff', 1)
-                
-                if staff_val == 2:
-                    m_lh.insert(n.offset, copy.deepcopy(n))
-                else:
-                    m_rh.insert(n.offset, copy.deepcopy(n))
+                if staff_val == 2: m_lh.insert(n.offset, copy.deepcopy(n))
+                else: m_rh.insert(n.offset, copy.deepcopy(n))
             patrons_dreta.append(m_rh)
             patrons_esquerra.append(m_lh)
     
-    # Ara que tenim els patrons de les dues mans, muntem la partitura nova
     score_out = stream.Score()
     p_d, p_e = stream.Part(), stream.Part()
     
-    for i in range(8):
-        idx = random.randint(0, len(patrons_dreta) - 1)
-        c_d, c_e = copy.deepcopy(patrons_dreta[idx]), copy.deepcopy(patrons_esquerra[idx])
+    # TRIEM ELS PATRONS PER A L'ESTRUCTURA AA BB
+    idx_A = random.randint(0, len(patrons_dreta) - 1)
+    idx_B = random.randint(0, len(patrons_dreta) - 1)
+    
+    # Llista d'índexs: [A, A, B, B]
+    sequencia_indices = [idx_A, idx_A, idx_B, idx_B]
+    
+    for i, idx in enumerate(sequencia_indices):
+        c_d = copy.deepcopy(patrons_dreta[idx])
+        c_e = copy.deepcopy(patrons_esquerra[idx])
         c_d.number = c_e.number = i + 1
         
-        # Neteja de formats
+        # Neteja de metadades redundants
         for c in [c_d, c_e]:
             for cl in ['KeySignature', 'TimeSignature', 'Clef', 'SystemLayout']:
                 c.removeByClass(cl)
 
-        # Posem la informació inicial al compàs 1
+        # Configuració inicial
         if i == 0:
             c_d.insert(0, clef.TrebleClef()); c_d.insert(0, meter.TimeSignature('4/4'))
             c_e.insert(0, clef.BassClef()); c_e.insert(0, meter.TimeSignature('4/4'))
             
-        # Salt de sistema al compàs 5
-        if i == 4: 
+        # SALT DE SISTEMA cada 2 compassos
+        if i == 2: 
             c_d.insert(0, layout.SystemLayout(isNew=True))
             
-        # Barra final
-        if i == 7:
+        # Barra final al compàs 4
+        if i == 3:
             c_d.rightBarline = c_e.rightBarline = bar.Barline('final')
 
         p_d.append(c_d)
@@ -112,13 +111,13 @@ def mostrar_partitura(xml_bytes):
       osmd.load({xml_escapat}).then(function() {{ osmd.render(); }});
     </script>
     """
-    components.html(html_code, height=650, scrolling=True)
+    components.html(html_code, height=600, scrolling=True)
 
-# --- UI ---
+# --- INTERFÍCIE ---
 col1, col2 = st.columns([1, 1])
 with col1:
-    if st.button('🚀 Generar Groove Funk (C7)', use_container_width=True):
-        with st.spinner('Barrejant compassos de les dues mans...'):
+    if st.button('🚀 Generar Exercici AA-BB', use_container_width=True):
+        with st.spinner('Creant estructura de 4 compassos...'):
             try:
                 nou_score = generar_estudi_final()
                 xml_path = nou_score.write('musicxml')
@@ -131,6 +130,6 @@ with col1:
 
 if st.session_state.score_generat:
     with col2:
-        st.download_button("📥 Descarregar MusicXML", st.session_state.xml_data, "Funk_C7.musicxml", use_container_width=True)
+        st.download_button("📥 Descarregar MusicXML", st.session_state.xml_data, "Funk_AABB.musicxml", use_container_width=True)
     st.divider()
     mostrar_partitura(st.session_state.xml_data)
