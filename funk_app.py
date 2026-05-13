@@ -7,10 +7,10 @@ import tempfile
 import streamlit.components.v1 as components
 
 # --- CONFIGURACIÓ DE PÀGINA ---
-st.set_page_config(page_title="Funk Generator Pro", page_icon="🎸", layout="wide")
+st.set_page_config(page_title="Funk Generator Wide", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Reading Generator")
-st.markdown("Generació aleatòria amb estructura **1=3**, Fa Major i layout de 2 compassos per línia.")
+st.markdown("Semicorxeres més espaiades per a una lectura més còmoda.")
 
 # --- RUTES I FITXERS ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -35,14 +35,17 @@ def render_musicxml(xml_data):
             drawingParameters: "compacttight",
             renderBackend: "svg"
         }});
+        // Augmentem el zoom i forcem que el dibuix sigui més ample
         osmd.setOptions({{
-            zoom: 1.1,
-            drawingParameters: "compacttight"
+            zoom: 1.4, 
+            spacingFactor: 1.5, // Augmenta l'espai entre notes
+            unitsPerFullMeasure: 4.0 // Força compassos més amples
         }});
         osmd.load(`{xml_str}`).then(() => osmd.render());
     </script>
     """
-    components.html(html_code, height=600, width=1000, scrolling=True)
+    # Augmentem el width del component per donar aire
+    components.html(html_code, height=750, width=1200, scrolling=True)
 
 # --- FUNCIONS DE CÀRREGA ---
 @st.cache_data
@@ -61,99 +64,71 @@ def carregar_pool_per_compassos(ruta):
             if notes_compas:
                 pool_per_m.append(notes_compas)
         return pool_per_m
-    except Exception as e:
-        st.error(f"Error carregant acords: {e}")
+    except:
         return None
 
 # --- LÒGICA DE GENERACIÓ ---
 if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
-    st.error("⚠️ No es troben els fitxers .musicxml al repositori.")
-    st.info(f"Busco: {nom_ritme} i {nom_acords}")
+    st.error("⚠️ No es troben els fitxers .musicxml.")
 else:
-    if st.button("🔥 GENERAR NOU EXERCICI", use_container_width=True):
-        with st.spinner("Dissenyant el groove..."):
+    if st.button("🔥 GENERAR EXERCICI ESPAIAT", use_container_width=True):
+        with st.spinner("Espaiant pentagrames..."):
             try:
-                # 1. Carregar recursos
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
-                
-                # 2. Triar un compàs d'acords de referència per a tot l'exercici
                 acords_referencia = random.choice(pool_compassos)
                 
-                # 3. Preparar el Score final
                 new_score = music21.stream.Score()
-                armadura_fa = music21.key.KeySignature(-1) # Fa Major (1 bemoll)
+                armadura_fa = music21.key.KeySignature(-1) 
                 
-                # Memòria per fer que 1 = 3
-                memoria_compassos = {} # {num_part: objecte_compas}
+                # Ajustem l'escalat global del document perquè tot sigui més gran
+                new_score.insert(0, music21.layout.ScoreLayout(scalingNumber=7.0))
 
-                # Trobem el punt d'inici (4 compassos seguits)
+                memoria_compassos = {}
                 num_m_originals = len(score_ritme.parts[0].getElementsByClass(music21.stream.Measure))
                 start_m = random.randint(0, max(0, num_m_originals - 4))
 
                 for idx_p, part_original in enumerate(score_ritme.parts):
                     nova_part = music21.stream.Part()
-                    
-                    # Clau i Armadura
-                    if idx_p == 0:
-                        nova_part.insert(0, music21.clef.TrebleClef())
-                    else:
-                        nova_part.insert(0, music21.clef.BassClef())
+                    nova_part.insert(0, music21.clef.TrebleClef() if idx_p == 0 else music21.clef.BassClef())
                     nova_part.insert(0, armadura_fa)
 
                     mesures_originals = list(part_original.getElementsByClass(music21.stream.Measure))
                     seleccio = mesures_originals[start_m : start_m + 4]
                     
                     for i, m in enumerate(seleccio):
-                        # LÒGICA 1=3: Si és el tercer compàs, copiem el primer
                         if i == 2 and idx_p in memoria_compassos:
                             m_nova = copy.deepcopy(memoria_compassos[idx_p])
-                            # Afegim el salt de línia al compàs 3
                             m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                         else:
                             m_nova = copy.deepcopy(m)
-                            
-                            # Si és mà dreta, apliquem els acords de referència
                             if idx_p == 0:
                                 for n in m_nova.flatten().notes:
-                                    nou_set = random.choice(acords_referencia)
-                                    acord_nou = music21.chord.Chord(nou_set)
+                                    acord_nou = music21.chord.Chord(random.choice(acords_referencia))
                                     acord_nou.duration = n.duration
                                     m_nova.replace(n, acord_nou)
-                            
-                            # Guardem el primer compàs per repetir-lo al tercer
                             if i == 0:
                                 memoria_compassos[idx_p] = copy.deepcopy(m_nova)
 
-                        # Configuració de la mesura
                         m_nova.number = i + 1
                         m_nova.makeBeams(inPlace=True)
                         nova_part.append(m_nova)
                     
-                    # Neteja de la part
                     nova_part = nova_part.makeNotation()
                     new_score.insert(0, nova_part)
 
-                # 4. Exportar a MusicXML
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".musicxml") as tmp:
                     new_score.write('musicxml', fp=tmp.name)
                     with open(tmp.name, 'rb') as f:
                         xml_data = f.read()
 
-                # --- RESULTATS ---
-                st.subheader("🎼 Previsualització")
+                st.subheader("🎼 Previsualització d'Alta Llegibilitat")
                 render_musicxml(xml_data)
                 
-                st.download_button(
-                    label="📥 Descarregar Fitxer XML",
-                    data=xml_data,
-                    file_name="funk_pro_1-3.musicxml",
-                    mime="application/vnd.recordare.musicxml+xml",
-                    use_container_width=True
-                )
+                st.download_button(label="📥 Descarregar XML", data=xml_data, 
+                                 file_name="funk_espaiat.musicxml", 
+                                 mime="application/vnd.recordare.musicxml+xml",
+                                 use_container_width=True)
                 
             except Exception as e:
-                st.error(f"S'ha produït un error: {e}")
-
-st.divider()
-st.caption("Estructura harmònica basada en compàs de referència. 2 compassos per sistema.")
+                st.error(f"Error: {e}")
