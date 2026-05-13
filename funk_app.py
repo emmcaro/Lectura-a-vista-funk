@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 # --- CONFIGURACIÓ DE PÀGINA ---
 st.set_page_config(page_title="Funk Generator Universal", page_icon="🎸", layout="wide")
 
-st.title("🎸 Funk Generator: Transposició Final")
+st.title("🎸 Funk Generator: Amb Armadures Reals")
 
 # Escala de Blues Base (Do)
 BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
@@ -74,19 +74,17 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
 else:
     col1, col2 = st.columns(2)
     with col1:
-        boto_generar = st.button("🎲 GENERAR I TRANSPOSAR", use_container_width=True)
+        boto_generar = st.button("🎲 GENERAR AMB ARMADURA", use_container_width=True)
 
     if boto_generar:
-        with st.spinner("Generant en Do i transposant al final..."):
+        with st.spinner("Generant i calculant armadura..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
                 
-                # 1. GENEREM L'ESTRUCTURA EN DO (C)
                 new_score = music21.stream.Score()
                 memoria_A, memoria_B = {}, {}
                 
-                # Intervals interns (Db, F, G)
                 opcions_internes = [
                     music21.interval.Interval('m2'), 
                     music21.interval.Interval('P4'), 
@@ -106,12 +104,11 @@ else:
                     seleccio = mesures_originals[start_m : start_m + 4]
                     
                     for i in range(4):
-                        if i in [0, 2]: # Compàs 1 i 3
+                        if i in [0, 2]:
                             m_nova = copy.deepcopy(seleccio[i])
                             if idx_p == 0:
                                 grup_acords = random.choice(pool_compassos)
                                 notes_elements = list(m_nova.flatten().notes)
-                                
                                 ratxes = []
                                 ratxa_actual = []
                                 for idx_n, n in enumerate(notes_elements):
@@ -153,28 +150,34 @@ else:
                         nova_part.append(m_nova)
                     new_score.insert(0, nova_part)
 
-                # 2. TRANSPOSICIÓ FINAL DEL SCORE COMPLET
-                tonalitats = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
-                to_final = random.choice(tonalitats)
-                itvl_final = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(to_final + '4'))
+                # --- TRANSPOSICIÓ I ARMADURA FINAL ---
+                tonalitats = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'F', 'Bb', 'Eb', 'Ab', 'Db']
+                to_final_nom = random.choice(tonalitats)
                 
+                # Calculem l'armadura (KeySignature) de la tonalitat triada
+                nova_armadura = music21.key.Key(to_final_nom).sharpness
+                ks = music21.key.KeySignature(nova_armadura)
+                
+                itvl_final = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(to_final_nom + '4'))
                 new_score.transpose(itvl_final, inPlace=True)
-                st.info(f"Exercici generat en tonalitat: **{to_final}**")
+                
+                st.info(f"Tonalitat de l'exercici: **{to_final_nom}**")
 
-                # 3. NETEJA POST-TRANSPOSICIÓ
                 for p in new_score.parts:
-                    # Forcem armadura de Do (per llegir amb accidentals)
-                    p.insert(0, music21.key.KeySignature(0))
-                    # Esborrem armadures que hagi pogut crear la transposició
+                    # Inserim l'armadura al principi de la part
+                    p.insert(0, ks)
+                    
+                    # Neteja de restes de transposició
                     for m in p.getElementsByClass(music21.stream.Measure):
-                        for ks in m.getElementsByClass(music21.key.KeySignature):
-                            m.remove(ks)
-                    # Neteja de naturals redundants que donaven l'error 'NoneType'
-                    for note_obj in p.flatten().notes:
-                        for p_obj in note_obj.pitches:
-                            if p_obj.accidental is not None:
-                                if p_obj.accidental.name == 'natural':
-                                    p_obj.accidental.displayStatus = False
+                        # Eliminem qualsevol canvi d'armadura que hagi aparegut als compassos interns
+                        for item in m.getElementsByClass(music21.key.KeySignature):
+                            m.remove(item)
+                            
+                    # Neteja de visuals d'accidentals
+                    for n in p.flatten().notes:
+                        for pitch in n.pitches:
+                            if pitch.accidental is not None and pitch.accidental.name == 'natural':
+                                pitch.accidental.displayStatus = False
 
                 new_score.insert(0, music21.layout.StaffGroup(list(new_score.parts), symbol='brace', barTogether=True))
 
@@ -189,5 +192,5 @@ else:
     if 'xml_data' in st.session_state:
         with col2:
             st.download_button(label="📥 Descarregar XML", data=st.session_state['xml_data'], 
-                               file_name="funk_transposat.musicxml", use_container_width=True)
+                               file_name="funk_armadura.musicxml", use_container_width=True)
         render_musicxml(st.session_state['xml_data'])
