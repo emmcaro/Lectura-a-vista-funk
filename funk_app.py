@@ -8,79 +8,188 @@ import streamlit.components.v1 as components
 
 # --- CONFIGURACIÓ DE PÀGINA ---
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
-st.title("🎸 Funk Generator: Estètica Professional")
 
-# --- RUTES ---
-try:
-    base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
-except Exception:
-    base_path = os.getcwd()
+st.title("🎸 Funk Generator: Melodies de Blues Fluides")
 
-nom_ritme = "buidat_ritmic_funk.musicxml"
-nom_acords = "font_acords_funk.musicxml" # Nota: He posat un subratlla per seguretat, ajusta'l si el teu fitxer no és així
-path_ritme = os.path.join(base_path, nom_ritme)
-path_acords = os.path.join(base_path, nom_acords)
+# Escala de Blues de Do amb F# (Quarta augmentada)
+BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
 
 # --- VISUALITZADOR JS (OSMD) ---
 def render_musicxml(xml_data):
-    # Limpiem el string XML per evitar errors amb caràcters especials a JS
-    try:
-        xml_str = xml_data.decode('utf-8').replace('\r', '').replace('`', '\\`').replace('$', '\\$')
-    except:
-        xml_str = ""
-
+    xml_str = xml_data.decode('utf-8').replace('`', '\\`').replace('$', '\\$')
     html_code = f"""
-    <div style="background-color: #f0f2f6; padding: 10px; display: flex; justify-content: center;">
-        <div style="background-color: #FFFFFF; padding: 20px; border-radius: 10px; width: 95%; max-width: 1200px; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <div style="background-color: #f0f2f6; padding: 20px; display: flex; justify-content: center;">
+        <div style="background-color: #FFFFFF; padding: 30px 5%; border-radius: 10px; width: 95%; max-width: 1200px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
             <div id="score-container"></div>
         </div>
     </div>
-    
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.5.8/build/opensheetmusicdisplay.min.js"></script>
     <script>
         const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("score-container", {{
             autoResize: true,
             drawTitle: false,
             drawComposer: false,
-            drawPartNames: true, 
+            drawPartNames: false,
             drawPartAbbreviations: false,
             drawMetronomeMarks: false,
+            drawMeasureNumbers: false,
             drawingParameters: "default"
         }});
-        
         osmd.setOptions({{
-            zoom: 2.0, 
-            spacingFactor: 1.5, 
-            newSystemsFromMusicXml: true, 
+            zoom: 1.6, 
+            spacingFactor: 1.2, 
+            newSystemsFromMusicXml: true, // Respecta el SystemLayout de music21
             pageFormat: "Endless",
             pageBackgroundColor: "#FFFFFF",
-            disableScrolling: false
+            renderSingleHorizontalStaffline: false
         }});
-
         osmd.load(`{xml_str}`).then(() => {{
+            // Forcem una amplada mínima per evitar que els compassos es vegin massa estrets
+            osmd.Sheet.Rules.MinMeasureWidth = 60; 
             osmd.render();
-        }}).catch(err => {{
-            console.error("Error carregant el document:", err);
-            const div = document.getElementById('score-container');
-            div.innerHTML = "<p style='color:red;'>Error al visualitzar: Prova de descarregar i obrir el fitxer a una altra eina.</p>";
         }});
     </script>
     """
-    components.html(html_code, height=900)
+    components.html(html_code, height=750)
 
 @st.cache_data
 def carregar_pool_per_compassos(ruta):
     try:
-        if not os.path.exists(ruta):
-            return []
         score = music21.converter.parse(ruta)
         pool = []
-        # Obtenim només la part 1 (sovint és la de veu principal o piano) per no complicar si n'hi ha diverses
-        # Ombrem tots els compassos de la primera part
-        part_principal = score.parts[0] if len(score.parts) > 0 else None
-        
-        if part_principal:
-            for m in part_principal.getElementsByClass(music21.stream.Measure):
-                notes = []
-                for el in m.flatten().notes:
-                    # Obtenim les notes com a 'Pitch' (ex: C
+        for m in score.parts[0].getElementsByClass(music21.stream.Measure):
+            notes_mesura = []
+            for el in m.flatten().notes:
+                if el.isChord:
+                    notes_mesura.append([p.nameWithOctave for p in el.pitches])
+                elif el.isNote:
+                    notes_mesura.append([el.pitch.nameWithOctave])
+            if notes_mesura:
+                pool.append(notes_mesura)
+        return pool
+    except:
+        return None
+
+def generar_frase_blues(n_notes):
+    direccio = random.choice([1, -1])
+    idx = random.randint(0, len(BLUES_C) - 1)
+    frase = []
+    for _ in range(n_notes):
+        frase.append(BLUES_C[idx])
+        idx += direccio
+        if idx >= len(BLUES_C) or idx < 0:
+            direccio *= -1
+            idx += (direccio * 2)
+            idx = max(0, min(len(BLUES_C) - 1, idx))
+    return frase
+
+# --- RUTES ---
+base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
+path_ritme = os.path.join(base_path, "buidat_ritmic_funk.musicxml")
+path_acords = os.path.join(base_path, "font acords funk.musicxml")
+
+if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
+    st.error("⚠️ Falten fitxers XML.")
+else:
+    col1, col2 = st.columns(2)
+    with col1:
+        boto_generar = st.button("🔥 GENERAR EXERCICI", use_container_width=True)
+
+    if boto_generar:
+        with st.spinner("Generant..."):
+            try:
+                pool_compassos = carregar_pool_per_compassos(path_acords)
+                score_ritme = music21.converter.parse(path_ritme)
+                
+                t2_key = random.choice(['Db', 'F'])
+                t4_key = random.choice(['Db', 'F'])
+                itvl2 = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(t2_key+'4'))
+                itvl4 = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(t4_key+'4'))
+                
+                new_score = music21.stream.Score()
+                armadura_fa = music21.key.KeySignature(-1) 
+                memoria_A, memoria_B = {}, {}
+
+                num_m_originals = len(score_ritme.parts[0].getElementsByClass(music21.stream.Measure))
+                start_m = random.randint(0, max(0, num_m_originals - 4))
+
+                for idx_p, part_original in enumerate(score_ritme.parts):
+                    nova_part = music21.stream.Part()
+                    nova_part.insert(0, music21.clef.TrebleClef() if idx_p == 0 else music21.clef.BassClef())
+                    nova_part.insert(0, armadura_fa)
+                    
+                    mesures_originals = list(part_original.getElementsByClass(music21.stream.Measure))
+                    seleccio = mesures_originals[start_m : start_m + 4]
+                    
+                    for i in range(4):
+                        if i in [0, 2]: # GENERACIÓ COMPASSOS 1 i 3
+                            m_nova = copy.deepcopy(seleccio[i])
+                            if idx_p == 0:
+                                grup_acords = random.choice(pool_compassos)
+                                notes_elements = list(m_nova.flatten().notes)
+                                
+                                ratxes = []
+                                ratxa_actual = []
+                                for idx_n, n in enumerate(notes_elements):
+                                    if n.duration.quarterLength <= 0.25:
+                                        ratxa_actual.append(idx_n)
+                                    else:
+                                        if len(ratxa_actual) >= 3: ratxes.append(ratxa_actual)
+                                        ratxa_actual = []
+                                if len(ratxa_actual) >= 3: ratxes.append(ratxa_actual)
+                                
+                                indices_melodia = {idx for r in ratxes for idx in r}
+                                map_notes_melodia = {}
+                                for r in ratxes:
+                                    frase = generar_frase_blues(len(r))
+                                    for idx_r, idx_orig in enumerate(r):
+                                        map_notes_melodia[idx_orig] = frase[idx_r]
+
+                                for idx_n, n in enumerate(notes_elements):
+                                    if idx_n in indices_melodia:
+                                        n_final = music21.note.Note(map_notes_melodia[idx_n])
+                                    else:
+                                        n_final = music21.chord.Chord(random.choice(grup_acords))
+                                    n_final.duration = n.duration
+                                    m_nova.replace(n, n_final)
+                            
+                            if i == 0: memoria_A[idx_p] = copy.deepcopy(m_nova)
+                            else: memoria_B[idx_p] = copy.deepcopy(m_nova)
+
+                        elif i == 1: 
+                            m_nova = copy.deepcopy(memoria_A[idx_p])
+                            m_nova.transpose(itvl2, inPlace=True)
+                        elif i == 3: 
+                            m_nova = copy.deepcopy(memoria_B[idx_p])
+                            m_nova.transpose(itvl4, inPlace=True)
+                            m_nova.rightBarline = music21.bar.Barline('final')
+
+                        # FORÇAR EL SALT DE LÍNIA NOMÉS AL COMPÀS 3
+                        if i == 2:
+                            m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
+                        
+                        m_nova.number = i + 1
+                        m_nova.makeBeams(inPlace=True)
+                        nova_part.append(m_nova)
+                    
+                    nova_part = nova_part.makeNotation()
+                    for p in nova_part.flatten().pitches:
+                        if p.accidental and p.accidental.name == 'natural':
+                            p.accidental.displayStatus = False
+                    new_score.insert(0, nova_part)
+
+                new_score.insert(0, music21.layout.StaffGroup(list(new_score.parts), symbol='brace', barTogether=True))
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".musicxml") as tmp:
+                    new_score.write('musicxml', fp=tmp.name)
+                    with open(tmp.name, 'rb') as f:
+                        st.session_state['xml_data'] = f.read()
+                
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    if 'xml_data' in st.session_state:
+        with col2:
+            st.download_button(label="📥 Descarregar XML", data=st.session_state['xml_data'], 
+                               file_name="funk_blues_AABB.musicxml", use_container_width=True)
+        render_musicxml(st.session_state['xml_data'])
