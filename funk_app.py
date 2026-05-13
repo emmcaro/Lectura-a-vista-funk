@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: Estètica Professional")
-st.markdown("Estructura AABB. Partitura ultra-neta, sense números, textos ni instruments.")
+st.markdown("Estructura AABB. Partitura ultra-neta i centrada, amb menys marge vertical.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -24,7 +24,7 @@ def render_musicxml(xml_data):
     xml_str = xml_data.decode('utf-8').replace('`', '\\`').replace('$', '\\$')
     html_code = f"""
     <div style="background-color: #f0f2f6; padding: 20px; display: flex; justify-content: center;">
-        <div style="background-color: #FFFFFF; padding: 80px 15%; border-radius: 10px; width: 100%; max-width: 1200px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+        <div style="background-color: #FFFFFF; padding: 20px 15%; border-radius: 10px; width: 100%; max-width: 1200px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
             <div id="score-container"></div>
         </div>
     </div>
@@ -35,8 +35,8 @@ def render_musicxml(xml_data):
             autoResize: true,
             drawTitle: false,
             drawComposer: false,
-            drawPartNames: false, // <-- SOLUCIÓ: Fora el nom de l'instrument (Piano)
-            drawPartAbbreviations: false, // <-- Fora abreviatures per si de cas
+            drawPartNames: false,
+            drawPartAbbreviations: false,
             drawMetronomeMarks: false,
             drawMeasureNumbers: false,
             drawingParameters: "default"
@@ -54,7 +54,8 @@ def render_musicxml(xml_data):
         }});
     </script>
     """
-    components.html(html_code, height=1200)
+    # Reduïm l'height per adaptar-nos a la pèrdua de marge vertical
+    components.html(html_code, height=900)
 
 @st.cache_data
 def carregar_pool_per_compassos(ruta):
@@ -73,7 +74,7 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ Falten fitxers XML.")
 else:
     if st.button("🔥 GENERAR EXERCICI NET", use_container_width=True):
-        with st.spinner("Eliminant instruments i preparant disseny..."):
+        with st.spinner("Ajustant marges..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
@@ -97,8 +98,6 @@ else:
 
                 for idx_p, part_original in enumerate(score_ritme.parts):
                     nova_part = music21.stream.Part()
-                    
-                    # SEGURETAT EXTRA: Netegem els noms a l'XML
                     nova_part.partName = ""
                     nova_part.partAbbreviation = ""
                     
