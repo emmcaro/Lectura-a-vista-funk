@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 # --- CONFIGURACIÓ DE PÀGINA ---
 st.set_page_config(page_title="Funk Generator Universal", page_icon="🎸", layout="wide")
 
-st.title("🎸 Funk Generator: Amb Armadures Reals")
+st.title("🎸 Funk Generator: Amb Armadures Corregides")
 
 # Escala de Blues Base (Do)
 BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
@@ -85,6 +85,7 @@ else:
                 new_score = music21.stream.Score()
                 memoria_A, memoria_B = {}, {}
                 
+                # Intervals interns (Db, F, G respecte a la tònica)
                 opcions_internes = [
                     music21.interval.Interval('m2'), 
                     music21.interval.Interval('P4'), 
@@ -150,13 +151,13 @@ else:
                         nova_part.append(m_nova)
                     new_score.insert(0, nova_part)
 
-                # --- TRANSPOSICIÓ I ARMADURA FINAL ---
+                # --- CORRECCIÓ TRANSPOSICIÓ I ARMADURA ---
                 tonalitats = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'F', 'Bb', 'Eb', 'Ab', 'Db']
                 to_final_nom = random.choice(tonalitats)
                 
-                # Calculem l'armadura (KeySignature) de la tonalitat triada
-                nova_armadura = music21.key.Key(to_final_nom).sharpness
-                ks = music21.key.KeySignature(nova_armadura)
+                # ÚS DE .sharps PER EVITAR L'ERROR
+                nombre_alteracions = music21.key.Key(to_final_nom).sharps
+                ks = music21.key.KeySignature(nombre_alteracions)
                 
                 itvl_final = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(to_final_nom + '4'))
                 new_score.transpose(itvl_final, inPlace=True)
@@ -164,16 +165,12 @@ else:
                 st.info(f"Tonalitat de l'exercici: **{to_final_nom}**")
 
                 for p in new_score.parts:
-                    # Inserim l'armadura al principi de la part
                     p.insert(0, ks)
-                    
-                    # Neteja de restes de transposició
                     for m in p.getElementsByClass(music21.stream.Measure):
-                        # Eliminem qualsevol canvi d'armadura que hagi aparegut als compassos interns
                         for item in m.getElementsByClass(music21.key.KeySignature):
                             m.remove(item)
-                            
-                    # Neteja de visuals d'accidentals
+                    
+                    # Neteja de visuals
                     for n in p.flatten().notes:
                         for pitch in n.pitches:
                             if pitch.accidental is not None and pitch.accidental.name == 'natural':
@@ -187,10 +184,10 @@ else:
                         st.session_state['xml_data'] = f.read()
                 
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error detectat: {e}")
 
     if 'xml_data' in st.session_state:
         with col2:
             st.download_button(label="📥 Descarregar XML", data=st.session_state['xml_data'], 
-                               file_name="funk_armadura.musicxml", use_container_width=True)
+                               file_name="funk_armadura_final.musicxml", use_container_width=True)
         render_musicxml(st.session_state['xml_data'])
