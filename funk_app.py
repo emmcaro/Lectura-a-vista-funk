@@ -11,7 +11,7 @@ st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="w
 
 st.title("🎸 Funk Generator: Melodies de Blues Fluides")
 
-# Escala de Blues de Do amb F# (Quarta augmentada)
+# Escala de Blues amb F# (ortografia correcta)
 BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
 
 # --- VISUALITZADOR JS (OSMD) ---
@@ -19,38 +19,27 @@ def render_musicxml(xml_data):
     xml_str = xml_data.decode('utf-8').replace('`', '\\`').replace('$', '\\$')
     html_code = f"""
     <div style="background-color: #f0f2f6; padding: 20px; display: flex; justify-content: center;">
-        <div style="background-color: #FFFFFF; padding: 30px 5%; border-radius: 10px; width: 95%; max-width: 1200px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+        <div style="background-color: #FFFFFF; padding: 20px; border-radius: 10px; width: 100%; max-width: 1100px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
             <div id="score-container"></div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.5.8/build/opensheetmusicdisplay.min.js"></script>
     <script>
         const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("score-container", {{
-            autoResize: true,
-            drawTitle: false,
-            drawComposer: false,
-            drawPartNames: false,
-            drawPartAbbreviations: false,
-            drawMetronomeMarks: false,
-            drawMeasureNumbers: false,
-            drawingParameters: "default"
+            autoResize: true, drawTitle: false, drawComposer: false, drawPartNames: false,
+            drawPartAbbreviations: false, drawMetronomeMarks: false, drawMeasureNumbers: false
         }});
         osmd.setOptions({{
-            zoom: 1.6, 
-            spacingFactor: 1.2, 
-            newSystemsFromMusicXml: true, // Respecta el SystemLayout de music21
-            pageFormat: "Endless",
-            pageBackgroundColor: "#FFFFFF",
-            renderSingleHorizontalStaffline: false
+            zoom: 1.4, // Una mica més petit per assegurar que caben 2 compassos
+            spacingFactor: 1.0,
+            newSystemsFromMusicXml: true, // Crucial: obeeix el salt del Python
+            pageFormat: "A4", // Establir un format fix ajuda a la coherència
+            pageBackgroundColor: "#FFFFFF"
         }});
-        osmd.load(`{xml_str}`).then(() => {{
-            // Forcem una amplada mínima per evitar que els compassos es vegin massa estrets
-            osmd.Sheet.Rules.MinMeasureWidth = 60; 
-            osmd.render();
-        }});
+        osmd.load(`{xml_str}`).then(() => osmd.render());
     </script>
     """
-    components.html(html_code, height=750)
+    components.html(html_code, height=700)
 
 @st.cache_data
 def carregar_pool_per_compassos(ruta):
@@ -60,15 +49,11 @@ def carregar_pool_per_compassos(ruta):
         for m in score.parts[0].getElementsByClass(music21.stream.Measure):
             notes_mesura = []
             for el in m.flatten().notes:
-                if el.isChord:
-                    notes_mesura.append([p.nameWithOctave for p in el.pitches])
-                elif el.isNote:
-                    notes_mesura.append([el.pitch.nameWithOctave])
-            if notes_mesura:
-                pool.append(notes_mesura)
+                if el.isChord: notes_mesura.append([p.nameWithOctave for p in el.pitches])
+                elif el.isNote: notes_mesura.append([el.pitch.nameWithOctave])
+            if notes_mesura: pool.append(notes_mesura)
         return pool
-    except:
-        return None
+    except: return None
 
 def generar_frase_blues(n_notes):
     direccio = random.choice([1, -1])
@@ -107,7 +92,6 @@ else:
                 itvl4 = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(t4_key+'4'))
                 
                 new_score = music21.stream.Score()
-                armadura_fa = music21.key.KeySignature(-1) 
                 memoria_A, memoria_B = {}, {}
 
                 num_m_originals = len(score_ritme.parts[0].getElementsByClass(music21.stream.Measure))
@@ -116,13 +100,15 @@ else:
                 for idx_p, part_original in enumerate(score_ritme.parts):
                     nova_part = music21.stream.Part()
                     nova_part.insert(0, music21.clef.TrebleClef() if idx_p == 0 else music21.clef.BassClef())
-                    nova_part.insert(0, armadura_fa)
+                    
+                    # Posem l'armadura al principi de la part
+                    nova_part.insert(0, music21.key.KeySignature(-1)) 
                     
                     mesures_originals = list(part_original.getElementsByClass(music21.stream.Measure))
                     seleccio = mesures_originals[start_m : start_m + 4]
                     
                     for i in range(4):
-                        if i in [0, 2]: # GENERACIÓ COMPASSOS 1 i 3
+                        if i in [0, 2]: # GENERACIÓ 1 i 3
                             m_nova = copy.deepcopy(seleccio[i])
                             if idx_p == 0:
                                 grup_acords = random.choice(pool_compassos)
@@ -131,8 +117,7 @@ else:
                                 ratxes = []
                                 ratxa_actual = []
                                 for idx_n, n in enumerate(notes_elements):
-                                    if n.duration.quarterLength <= 0.25:
-                                        ratxa_actual.append(idx_n)
+                                    if n.duration.quarterLength <= 0.25: ratxa_actual.append(idx_n)
                                     else:
                                         if len(ratxa_actual) >= 3: ratxes.append(ratxa_actual)
                                         ratxa_actual = []
@@ -159,12 +144,19 @@ else:
                         elif i == 1: 
                             m_nova = copy.deepcopy(memoria_A[idx_p])
                             m_nova.transpose(itvl2, inPlace=True)
+                            # SOLUCIÓ: Eliminem armadures fantasmes creades per la transposició
+                            for ks in m_nova.getElementsByClass(music21.key.KeySignature):
+                                m_nova.remove(ks)
+
                         elif i == 3: 
                             m_nova = copy.deepcopy(memoria_B[idx_p])
                             m_nova.transpose(itvl4, inPlace=True)
+                            # SOLUCIÓ: Eliminem armadures fantasmes
+                            for ks in m_nova.getElementsByClass(music21.key.KeySignature):
+                                m_nova.remove(ks)
                             m_nova.rightBarline = music21.bar.Barline('final')
 
-                        # FORÇAR EL SALT DE LÍNIA NOMÉS AL COMPÀS 3
+                        # SALT DE LÍNIA: Només al compàs 3
                         if i == 2:
                             m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                         
@@ -172,10 +164,12 @@ else:
                         m_nova.makeBeams(inPlace=True)
                         nova_part.append(m_nova)
                     
+                    # Neteja final de la part
                     nova_part = nova_part.makeNotation()
                     for p in nova_part.flatten().pitches:
                         if p.accidental and p.accidental.name == 'natural':
                             p.accidental.displayStatus = False
+                    
                     new_score.insert(0, nova_part)
 
                 new_score.insert(0, music21.layout.StaffGroup(list(new_score.parts), symbol='brace', barTogether=True))
