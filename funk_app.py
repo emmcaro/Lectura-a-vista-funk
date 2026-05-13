@@ -75,7 +75,13 @@ path_acords = os.path.join(base_path, "font acords funk.musicxml")
 if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ Falten fitxers XML.")
 else:
-    if st.button("🎲 GENERAR EXERCICI", use_container_width=True):
+    # Creem dues columnes per als botons
+    col1, col2 = st.columns(2)
+
+    with col1:
+        boto_generar = st.button("🎲 GENERAR EXERCICI", use_container_width=True)
+
+    if boto_generar:
         with st.spinner("Generant..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
@@ -180,12 +186,14 @@ else:
             except Exception as e:
                 st.error(f"Error: {e}")
 
+    # Si ja hi ha dades, mostrem el botó de descàrrega a la col2
     if 'xml_data' in st.session_state:
-        st.download_button(
-            label="📥 DESCARREGAR XML",
-            data=st.session_state['xml_data'],
-            file_name=f"exercici_funk_{st.session_state.get('tonalitat', 'C')}.musicxml",
-            mime="application/vnd.recordare.musicxml+xml",
-            use_container_width=True
-        )
+        with col2:
+            st.download_button(
+                label="📥 DESCARREGAR XML",
+                data=st.session_state['xml_data'],
+                file_name=f"exercici_funk_{st.session_state.get('tonalitat', 'C')}.musicxml",
+                mime="application/vnd.recordare.musicxml+xml",
+                use_container_width=True
+            )
         render_musicxml(st.session_state['xml_data'])
