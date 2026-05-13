@@ -67,11 +67,17 @@ def carregar_pool_per_compassos(ruta):
         return pool
     except: return None
 
-# --- LÒGICA DE GENERACIÓ ---
+# --- LÒGICA DE GENERACIÓ I INTERFÍCIE ---
 if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ Falten fitxers XML.")
 else:
-    if st.button("🔥 GENERAR EXERCICI NET", use_container_width=True):
+    # Creem dues columnes per posar els botons de costat
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        boto_generar = st.button("🔥 GENERAR EXERCICI NET", use_container_width=True)
+
+    if boto_generar:
         with st.spinner("Generant..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
@@ -130,7 +136,6 @@ else:
                         elif i == 3: 
                             m_nova = copy.deepcopy(memoria_B[idx_p])
                             m_nova.transpose(itvl_m4, inPlace=True)
-                            # <-- NOVETAT: Afegim la doble barra al final de l'últim compàs
                             m_nova.rightBarline = music21.bar.Barline('final')
 
                         m_nova.number = i + 1
@@ -145,7 +150,6 @@ else:
 
                     new_score.insert(0, nova_part)
 
-                # <-- NOVETAT: Creem el grup de pentagrames tipus piano i els unims
                 agrupacio_piano = music21.layout.StaffGroup(
                     list(new_score.parts), 
                     symbol='brace', 
@@ -158,14 +162,23 @@ else:
                     with open(tmp.name, 'rb') as f:
                         xml_data = f.read()
 
-                render_musicxml(xml_data)
-                
-                st.download_button(
-                    label="📥 Descarregar XML", 
-                    data=xml_data, 
-                    file_name="funk_AABB_final.musicxml",
-                    mime="application/vnd.recordare.musicxml+xml"
-                )
+                # Guardem les dades a la memòria de la sessió
+                st.session_state['xml_data'] = xml_data
+                st.session_state['desti_m2'] = desti_m2
+                st.session_state['desti_m4'] = desti_m4
                 
             except Exception as e:
                 st.error(f"Error: {e}")
+
+    # Si tenim l'XML guardat a la sessió, mostrem el botó de descàrrega i el visualitzador
+    if 'xml_data' in st.session_state:
+        with col2:
+            st.download_button(
+                label="📥 Descarregar XML", 
+                data=st.session_state['xml_data'], 
+                file_name="funk_AABB_final.musicxml",
+                mime="application/vnd.recordare.musicxml+xml",
+                use_container_width=True
+            )
+            
+        render_musicxml(st.session_state['xml_data'])
