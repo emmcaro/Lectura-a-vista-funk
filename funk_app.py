@@ -9,8 +9,8 @@ import streamlit.components.v1 as components
 # --- CONFIGURACIÓ DE PÀGINA ---
 st.set_page_config(page_title="Funk Generator Mixolydian", page_icon="🎸", layout="wide")
 
-st.title("🎸 Funk Generator: Melodies Senseres")
-st.subheader("Melodia només en grups de 3-4 semicorxeres sense silencis")
+st.title("🎸 Funk Generator: Mixolidi i Semicorxeres")
+st.subheader("Melodia només en grups de 3-4 sense silencis entremig")
 
 # Escala de Blues Base (Do)
 BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
@@ -78,7 +78,7 @@ else:
         boto_generar = st.button("🎲 GENERAR EXERCICI", use_container_width=True)
 
     if boto_generar:
-        with st.spinner("Analitzant rítmica i generant..."):
+        with st.spinner("Generant..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
@@ -102,31 +102,35 @@ else:
                     
                     for i in range(4):
                         m_nova = copy.deepcopy(seleccio[i])
+                        
                         if i in [0, 2]:
-                            if idx_p == 0:
-                                # Agafem tots els elements (notes i silencis) per comprovar continuïtat
-                                tots_elements = list(m_nova.flatten().getElementsNotOfClass(music21.layout.LayoutBase).notesAndRests)
+                            if idx_p == 0: # Mà dreta
+                                # DEFINICIÓ SEGURA DEL POOL PER AQUEST COMPÀS
+                                grup_acords = random.choice(pool_compassos)
+                                
+                                # Agafem tot: notes, acords i silencis
+                                tots_els_elements = list(m_nova.flatten().getElementsNotOfClass(music21.layout.LayoutBase).notesAndRests)
                                 notes_soles = list(m_nova.flatten().notes)
                                 
                                 ratxes = []
                                 ratxa_actual = []
                                 
-                                # LÒGICA NOVA: Només ratxes de NOTES (no silencis) seguides
-                                for idx_e, el in enumerate(tots_elements):
+                                # Detector de ratxes sense silencis
+                                for el in tots_els_elements:
                                     if el.isNote or el.isChord:
                                         if el.duration.quarterLength <= 0.25:
-                                            # Busquem l'índex que té aquesta nota dins de la llista 'notes_soles'
+                                            # Guardem l'índex de la nota dins la llista de notes
                                             idx_a_notes = notes_soles.index(el)
                                             ratxa_actual.append(idx_a_notes)
                                         else:
                                             if 3 <= len(ratxa_actual) <= 4: ratxes.append(ratxa_actual)
                                             ratxa_actual = []
-                                    else: # És un silenci: TRENCA LA RATXA
+                                    else: # És un silenci, trenca la ratxa
                                         if 3 <= len(ratxa_actual) <= 4: ratxes.append(ratxa_actual)
                                         ratxa_actual = []
                                 if 3 <= len(ratxa_actual) <= 4: ratxes.append(ratxa_actual)
                                 
-                                indices_melodia = {idx for r in ratxes for idx in r}
+                                set_indices_melodia = {idx for r in ratxes for idx in r}
                                 map_notes_melodia = {}
                                 for r in ratxes:
                                     frase = generar_frase_blues(len(r))
@@ -134,7 +138,7 @@ else:
                                         map_notes_melodia[idx_orig] = frase[idx_r]
 
                                 for idx_n, n in enumerate(notes_soles):
-                                    if idx_n in indices_melodia:
+                                    if idx_n in set_indices_melodia:
                                         n_f = music21.note.Note(map_notes_melodia[idx_n])
                                     else:
                                         n_f = music21.chord.Chord(random.choice(grup_acords))
@@ -158,21 +162,26 @@ else:
                         nova_part.append(m_nova)
                     new_score.insert(0, nova_part)
 
-                # --- APLICAR TRANSPOSICIÓ MIXOLÍDIA ---
+                # --- TRANSPOSICIÓ I ARMADURA MIXOLÍDIA ---
                 tonalitats = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'F', 'Bb', 'Eb', 'Ab', 'Db']
                 to_base = random.choice(tonalitats)
+                
+                # La tònica C7 porta armadura de F (Sib)
                 p_armadura = music21.pitch.Pitch(to_base).transpose('P4')
                 num_sharps = music21.key.Key(p_armadura.name).sharps
                 
-                new_score.transpose(music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(to_base+'4')), inPlace=True)
+                itvl_final = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(to_base+'4'))
+                new_score.transpose(itvl_final, inPlace=True)
                 
                 for p in new_score.parts:
                     p.insert(0, music21.key.KeySignature(num_sharps))
                     for m in p.getElementsByClass(music21.stream.Measure):
-                        for item in list(m.getElementsByClass(music21.key.KeySignature)): m.remove(item)
+                        for item in list(m.getElementsByClass(music21.key.KeySignature)):
+                            m.remove(item)
                     for n in p.flatten().notes:
                         for pitch in n.pitches:
-                            if pitch.accidental and pitch.accidental.name == 'natural': pitch.accidental.displayStatus = False
+                            if pitch.accidental and pitch.accidental.name == 'natural':
+                                pitch.accidental.displayStatus = False
 
                 st.info(f"Tònica: **{to_base}7** (Armadura de {p_armadura.name})")
                 new_score.insert(0, music21.layout.StaffGroup(list(new_score.parts), symbol='brace', barTogether=True))
@@ -188,5 +197,5 @@ else:
     if 'xml_data' in st.session_state:
         with col2:
             st.download_button(label="📥 Descarregar XML", data=st.session_state['xml_data'], 
-                               file_name="funk_mixolydi_net.musicxml", use_container_width=True)
+                               file_name="funk_mixolydi_final.musicxml", use_container_width=True)
         render_musicxml(st.session_state['xml_data'])
