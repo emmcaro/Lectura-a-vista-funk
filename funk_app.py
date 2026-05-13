@@ -1,3 +1,8 @@
+Entesos, fem marxa enrere i ens quedem exactament amb aquesta versió neta, estable i funcional. Sense experiments, només l'estructura AABB i els acords purs.
+
+Aquí tens el codi restaurat tal com l'has demanat:
+
+```python
 import streamlit as st
 import music21
 import os
@@ -182,3 +187,5 @@ else:
             )
             
         render_musicxml(st.session_state['xml_data'])
+
+```
