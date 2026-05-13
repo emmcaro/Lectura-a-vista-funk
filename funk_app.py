@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: AABB Harmonitzat")
-st.markdown("Estructura: **1=2** i **3=4**. Partitura neta sense alteracions de precaució, mida extra gran i fons blanc.")
+st.markdown("Estructura: **1=2** i **3=4**. Partitura amb **marge blanc (padding)** per a una lectura més còmoda.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -23,7 +23,10 @@ path_acords = os.path.join(base_path, nom_acords)
 def render_musicxml(xml_data):
     xml_str = xml_data.decode('utf-8').replace('`', '\\`').replace('$', '\\$')
     html_code = f"""
-    <div id="score-container" style="width: 100%;"></div>
+    <div style="background-color: #FFFFFF; padding: 30px; border-radius: 10px; width: 100%; box-sizing: border-box;">
+        <div id="score-container" style="width: 100%;"></div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.5.8/build/opensheetmusicdisplay.min.js"></script>
     <script>
         const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("score-container", {{
@@ -33,11 +36,11 @@ def render_musicxml(xml_data):
             drawingParameters: "compacttight"
         }});
         osmd.setOptions({{
-            zoom: 2.1, // <-- MIDA ENCARA MÉS GRAN (Abans 1.8)
+            zoom: 2.1, 
             spacingFactor: 1.5,
             newSystemsFromMusicXml: true,
             pageFormat: "Endless",
-            pageBackgroundColor: "#FFFFFF" // Fons blanc assegurat pel mode fosc
+            pageBackgroundColor: "#FFFFFF" 
         }});
         osmd.load(`{xml_str}`).then(() => {{
             osmd.Sheet.Rules.PageWidth = 80; 
@@ -45,7 +48,6 @@ def render_musicxml(xml_data):
         }});
     </script>
     """
-    # Hem augmentat l'alçada a 950 perquè hi càpiga el zoom nou
     components.html(html_code, height=950, width=1000)
 
 @st.cache_data
@@ -65,7 +67,7 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ No es troben els fitxers .musicxml.")
 else:
     if st.button("🔥 GENERAR EXERCICI A-A-B-B", use_container_width=True):
-        with st.spinner("Sincronitzant mans, netejant alteracions i preparant partitura..."):
+        with st.spinner("Sincronitzant mans i aplicant estils..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
@@ -145,7 +147,7 @@ else:
 
                 st.subheader(f"🎼 Estructura: C7 | {desti_m2}7 | C7 | {desti_m4}7")
                 render_musicxml(xml_data)
-                st.download_button(label="📥 Descarregar XML", data=xml_data, file_name="funk_AABB_dinamic_net.musicxml")
+                st.download_button(label="📥 Descarregar XML", data=xml_data, file_name="funk_AABB_espaiat.musicxml")
                 
             except Exception as e:
                 st.error(f"Error: {e}")
