@@ -130,6 +130,8 @@ else:
                         elif i == 3: 
                             m_nova = copy.deepcopy(memoria_B[idx_p])
                             m_nova.transpose(itvl_m4, inPlace=True)
+                            # <-- NOVETAT: Afegim la doble barra al final de l'últim compàs
+                            m_nova.rightBarline = music21.bar.Barline('final')
 
                         m_nova.number = i + 1
                         m_nova.makeBeams(inPlace=True)
@@ -143,15 +145,21 @@ else:
 
                     new_score.insert(0, nova_part)
 
+                # <-- NOVETAT: Creem el grup de pentagrames tipus piano i els unims
+                agrupacio_piano = music21.layout.StaffGroup(
+                    list(new_score.parts), 
+                    symbol='brace', 
+                    barTogether=True
+                )
+                new_score.insert(0, agrupacio_piano)
+
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".musicxml") as tmp:
                     new_score.write('musicxml', fp=tmp.name)
                     with open(tmp.name, 'rb') as f:
                         xml_data = f.read()
 
-                # Mostrar visualitzador sense textos previs
                 render_musicxml(xml_data)
                 
-                # Afegim el botó de descàrrega
                 st.download_button(
                     label="📥 Descarregar XML", 
                     data=xml_data, 
