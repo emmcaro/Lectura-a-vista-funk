@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: AABB Harmonitzat")
-st.markdown("Estructura: **1=2** i **3=4**. Partitura panoràmica i neta.")
+st.markdown("Estructura: **1=2** i **3=4**. Partitura **GIGANT** amb salt de línia forçat cada 2 compassos.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -23,7 +23,7 @@ path_acords = os.path.join(base_path, nom_acords)
 def render_musicxml(xml_data):
     xml_str = xml_data.decode('utf-8').replace('`', '\\`').replace('$', '\\$')
     html_code = f"""
-    <div style="background-color: #FFFFFF; padding: 30px; border-radius: 10px; width: 100%; box-sizing: border-box;">
+    <div style="background-color: #FFFFFF; padding: 40px; border-radius: 15px; width: 100%; box-sizing: border-box; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
         <div id="score-container" style="width: 100%;"></div>
     </div>
     
@@ -36,21 +36,22 @@ def render_musicxml(xml_data):
             drawingParameters: "compacttight"
         }});
         osmd.setOptions({{
-            zoom: 2.1, 
-            spacingFactor: 1.5,
+            zoom: 2.6, // <-- ZOOM MOLT GRAN (Abans 2.1)
+            spacingFactor: 1.8,
             newSystemsFromMusicXml: true,
             pageFormat: "Endless",
             pageBackgroundColor: "#FFFFFF" 
         }});
         osmd.load(`{xml_str}`).then(() => {{
-            // Hem eliminat la limitació de PageWidth perquè aprofiti tot el 100% de la pantalla
+            // FORCEM EL SALT: Cada compàs ha d'ocupar almenys 60 unitats d'OSMD.
+            // Això impedeix que 3 compassos càpiguen horitzontalment.
+            osmd.Sheet.Rules.MinMeasureWidth = 60; 
             osmd.render();
         }});
     </script>
     """
-    # Eliminem el paràmetre width=1000 perquè Streamlit ocupi tot l'espai horitzontal disponible
-    # Pugem l'height a 1100 per evitar talls verticals
-    components.html(html_code, height=1100)
+    # Augmentem l'alçada a 1200 per donar espai al zoom i al padding extra
+    components.html(html_code, height=1200)
 
 @st.cache_data
 def carregar_pool_per_compassos(ruta):
@@ -69,7 +70,7 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ No es troben els fitxers .musicxml.")
 else:
     if st.button("🔥 GENERAR EXERCICI A-A-B-B", use_container_width=True):
-        with st.spinner("Sincronitzant mans i renderitzant a pantalla completa..."):
+        with st.spinner("Preparant partitura súper-extra..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
@@ -122,6 +123,7 @@ else:
                                     nou_acord.duration = n.duration
                                     m_nova.replace(n, nou_acord)
                             memoria_B[idx_p] = copy.deepcopy(m_nova)
+                            # SALT DE LÍNIA al compàs 3 per a Music21
                             m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                             
                         elif i == 3: 
@@ -132,7 +134,6 @@ else:
                         m_nova.makeBeams(inPlace=True)
                         nova_part.append(m_nova)
                     
-                    # Generem notació
                     nova_part = nova_part.makeNotation()
                     
                     # NETEJA D'ALTERACIONS
@@ -149,7 +150,8 @@ else:
 
                 st.subheader(f"🎼 Estructura: C7 | {desti_m2}7 | C7 | {desti_m4}7")
                 render_musicxml(xml_data)
-                st.download_button(label="📥 Descarregar XML", data=xml_data, file_name="funk_AABB_panoramic.musicxml")
+                st.download_button(label="📥 Descarregar XML", data=xml_data, file_name="funk_AABB_gigant.musicxml")
                 
             except Exception as e:
                 st.error(f"Error: {e}")
+                
