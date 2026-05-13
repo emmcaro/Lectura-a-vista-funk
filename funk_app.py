@@ -7,10 +7,10 @@ import tempfile
 import streamlit.components.v1 as components
 
 # --- CONFIGURACIÓ DE PÀGINA ---
-st.set_page_config(page_title="Funk Generator Ultra-Fix", page_icon="🎸", layout="wide")
+st.set_page_config(page_title="Lectura Funk", page_icon="🎸", layout="wide")
 
-st.title("🎸 Funk Generator: Semicorxeres Blindades")
-st.markdown("Lògica d'escombrat per pols: la melodia només es crea si no hi ha buits temporals.")
+st.title("Lectura Funk")
+st.markdown("")
 
 # --- FUNCIONS DE SUPORT ---
 
@@ -181,7 +181,7 @@ else:
                         for pitch in n.pitches:
                             if pitch.accidental and pitch.accidental.name == 'natural': pitch.accidental.displayStatus = False
 
-                st.info(f"Generat en **{tonalitat_base}7**")
+               
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".musicxml") as tmp:
                     new_score.write('musicxml', fp=tmp.name)
