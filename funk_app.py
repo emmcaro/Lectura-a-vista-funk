@@ -11,8 +11,8 @@ st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="w
 
 st.title("🎸 Funk Generator: Melodies de Blues Fluides")
 
-# Escala de Blues de Do
-BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
+# Escala de Blues de Do (Base)
+BLUES_C = ['C4', 'Eb4', 'F4', 'Gb4', 'G4', 'Bb4', 'C5']
 
 # --- VISUALITZADOR JS (OSMD) ---
 def render_musicxml(xml_data):
@@ -48,56 +48,63 @@ def carregar_pool_per_compassos(ruta):
         score = music21.converter.parse(ruta)
         pool = []
         for m in score.parts[0].getElementsByClass(music21.stream.Measure):
-            notes = [[p.nameWithOctave for p in el.pitches] if el.isChord else [el.pitch.nameWithOctave] 
-                     for el in m.flatten().notes if el.isNote or el.isChord]
-            if notes: pool.append(notes)
+            # Guardem la llista de pitxes de cada acord/nota del compàs
+            notes_mesura = []
+            for el in m.flatten().notes:
+                if el.isChord:
+                    notes_mesura.append([p.nameWithOctave for p in el.pitches])
+                elif el.isNote:
+                    notes_mesura.append([el.pitch.nameWithOctave])
+            if notes_mesura:
+                pool.append(notes_mesura)
         return pool
-    except: return None
+    except:
+        return None
 
-# --- FUNCIONS AUXILIARS DE MELODIA ---
 def generar_frase_blues(n_notes):
-    """Genera una llista de notes de l'escala de blues que es mouen per grau conjunt."""
-    direccio = random.choice([1, -1]) # 1 per pujar, -1 per baixar
-    index_actual = random.randint(0, len(BLUES_C) - 1)
+    """Genera notes per grau conjunt de l'escala de blues."""
+    direccio = random.choice([1, -1])
+    idx = random.randint(0, len(BLUES_C) - 1)
     frase = []
-    
     for _ in range(n_notes):
-        frase.append(BLUES_C[index_actual])
-        # Movem l'índex un pas en la direcció escollida, sense sortir dels límits
-        index_actual += direccio
-        if index_actual >= len(BLUES_C) or index_actual < 0:
-            direccio *= -1 # Si arribem al final, rebem (canvi de direcció)
-            index_actual += (direccio * 2)
-            index_actual = max(0, min(len(BLUES_C) - 1, index_actual))
-            
+        frase.append(BLUES_C[idx])
+        idx += direccio
+        if idx >= len(BLUES_C) or idx < 0:
+            direccio *= -1
+            idx += (direccio * 2)
+            idx = max(0, min(len(BLUES_C) - 1, idx))
     return frase
 
-# --- LÒGICA DE GENERACIÓ ---
+# --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
 path_ritme = os.path.join(base_path, "buidat_ritmic_funk.musicxml")
 path_acords = os.path.join(base_path, "font acords funk.musicxml")
 
 if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
-    st.error("⚠️ Falten fitxers XML.")
+    st.error("⚠️ Falten fitxers XML al directori.")
 else:
     col1, col2 = st.columns(2)
     with col1:
         boto_generar = st.button("🔥 GENERAR EXERCICI", use_container_width=True)
 
     if boto_generar:
-        with st.spinner("Generant..."):
+        with st.spinner("Generant partitura..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
                 
-                # Transposicions aleatòries
-                itvls = { 'Db': music21.interval.Interval('C4', 'Db4'), 'F': music21.interval.Interval('C4', 'F4') }
-                t2 = random.choice(['Db', 'F'])
-                t4 = random.choice(['Db', 'F'])
+                # Transposicions per B (compassos 2 i 4)
+                t2_key = random.choice(['Db', 'F'])
+                t4_key = random.choice(['Db', 'F'])
+                itvl2 = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(t2_key+'4'))
+                itvl4 = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(t4_key+'4'))
                 
                 new_score = music21.stream.Score()
                 armadura_fa = music21.key.KeySignature(-1) 
-                memoria_A, memoria_B = {}, {}
+                
+                # Diccionaris de memòria per AABB (clau: idx de la part)
+                memoria_A = {}
+                memoria_B = {}
 
                 num_m_originals = len(score_ritme.parts[0].getElementsByClass(music21.stream.Measure))
                 start_m = random.randint(0, max(0, num_m_originals - 4))
@@ -111,54 +118,55 @@ else:
                     seleccio = mesures_originals[start_m : start_m + 4]
                     
                     for i in range(4):
-                        if i in [0, 2]: # Creem base per compassos 1 i 3
+                        if i in [0, 2]: # GENERACIÓ DE COMPASSOS 1 i 3
                             m_nova = copy.deepcopy(seleccio[i])
-                            if idx_p == 0: # Només mà dreta
+                            
+                            # Només apliquem canvis si és la mà dreta (idx_p == 0)
+                            # La mà esquerra es queda amb el ritme original del fitxer
+                            if idx_p == 0:
                                 grup_acords = random.choice(pool_compassos)
-                                notes_list = list(m_nova.flatten().notes)
+                                notes_elements = list(m_nova.flatten().notes)
                                 
-                                # --- DETECTOR DE RATXES DE SEMICORXERES ---
-                                # Busquem grups de 3 o més semicorxeres consecutives
+                                # Detector de ratxes de semicorxeres (>= 3)
                                 ratxes = []
                                 ratxa_actual = []
-                                for idx_n, n in enumerate(notes_list):
-                                    if n.duration.quarterLength <= 0.25: # Semicorxera o menys
+                                for idx_n, n in enumerate(notes_elements):
+                                    if n.duration.quarterLength <= 0.25:
                                         ratxa_actual.append(idx_n)
                                     else:
-                                        if len(ratxa_actual) >= 3:
-                                            ratxes.append(ratxa_actual)
+                                        if len(ratxa_actual) >= 3: ratxes.append(ratxa_actual)
                                         ratxa_actual = []
-                                if len(ratxa_actual) >= 3:
-                                    ratxes.append(ratxa_actual)
+                                if len(ratxa_actual) >= 3: ratxes.append(ratxa_actual)
                                 
-                                # Convertim les ratxes en melodia i la resta en acords
                                 indices_melodia = {idx for r in ratxes for idx in r}
-                                
-                                # Per cada ratxa, generem una frase de blues per grau conjunt
                                 map_notes_melodia = {}
                                 for r in ratxes:
                                     frase = generar_frase_blues(len(r))
-                                    for idx_en_ratxa, idx_original in enumerate(r):
-                                        map_notes_melodia[idx_original] = frase[idx_en_ratxa]
+                                    for idx_r, idx_orig in enumerate(r):
+                                        map_notes_melodia[idx_orig] = frase[idx_r]
 
-                                for idx_n, n in enumerate(notes_list):
+                                for idx_n, n in enumerate(notes_elements):
                                     if idx_n in indices_melodia:
-                                        n_nova = music21.note.Note(map_notes_melodia[idx_n])
+                                        # IMPORTANT: Creem objecte Note, no un string
+                                        n_final = music21.note.Note(map_notes_melodia[idx_n])
                                     else:
-                                        n_nova = music21.chord.Chord(random.choice(grup_acords))
+                                        # IMPORTANT: Creem objecte Chord
+                                        n_final = music21.chord.Chord(random.choice(grup_acords))
                                     
-                                    n_nova.duration = n.duration
-                                    m_nova.replace(n, n_nova)
+                                    n_final.duration = n.duration
+                                    m_nova.replace(n, n_final)
                             
+                            # Guardem a la memòria per poder repetir/transposar
                             if i == 0: memoria_A[idx_p] = copy.deepcopy(m_nova)
                             else: memoria_B[idx_p] = copy.deepcopy(m_nova)
 
-                        elif i == 1: # Compàs 2
+                        elif i == 1: # REPETICIÓ TRANSPOSADA COMPÀS 2
                             m_nova = copy.deepcopy(memoria_A[idx_p])
-                            m_nova.transpose(itvls[t2], inPlace=True)
-                        elif i == 3: # Compàs 4
+                            m_nova.transpose(itvl2, inPlace=True)
+                            
+                        elif i == 3: # REPETICIÓ TRANSPOSADA COMPÀS 4
                             m_nova = copy.deepcopy(memoria_B[idx_p])
-                            m_nova.transpose(itvls[t4], inPlace=True)
+                            m_nova.transpose(itvl4, inPlace=True)
                             m_nova.rightBarline = music21.bar.Barline('final')
 
                         if i == 2: m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
@@ -167,6 +175,7 @@ else:
                         nova_part.append(m_nova)
                     
                     nova_part = nova_part.makeNotation()
+                    # Neteja de naturals redundants
                     for p in nova_part.flatten().pitches:
                         if p.accidental and p.accidental.name == 'natural':
                             p.accidental.displayStatus = False
@@ -180,7 +189,7 @@ else:
                         st.session_state['xml_data'] = f.read()
                 
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"S'ha produït un error en la generació: {e}")
 
     if 'xml_data' in st.session_state:
         with col2:
