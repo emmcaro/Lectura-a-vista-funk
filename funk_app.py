@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: AABB Harmonitzat")
-st.markdown("Estructura: **1=2** i **3=4**. Partitura amb **marge blanc (padding)** per a una lectura més còmoda.")
+st.markdown("Estructura: **1=2** i **3=4**. Partitura panoràmica i neta.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -43,12 +43,14 @@ def render_musicxml(xml_data):
             pageBackgroundColor: "#FFFFFF" 
         }});
         osmd.load(`{xml_str}`).then(() => {{
-            osmd.Sheet.Rules.PageWidth = 80; 
+            // Hem eliminat la limitació de PageWidth perquè aprofiti tot el 100% de la pantalla
             osmd.render();
         }});
     </script>
     """
-    components.html(html_code, height=950, width=1000)
+    # Eliminem el paràmetre width=1000 perquè Streamlit ocupi tot l'espai horitzontal disponible
+    # Pugem l'height a 1100 per evitar talls verticals
+    components.html(html_code, height=1100)
 
 @st.cache_data
 def carregar_pool_per_compassos(ruta):
@@ -67,7 +69,7 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ No es troben els fitxers .musicxml.")
 else:
     if st.button("🔥 GENERAR EXERCICI A-A-B-B", use_container_width=True):
-        with st.spinner("Sincronitzant mans i aplicant estils..."):
+        with st.spinner("Sincronitzant mans i renderitzant a pantalla completa..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
@@ -133,7 +135,7 @@ else:
                     # Generem notació
                     nova_part = nova_part.makeNotation()
                     
-                    # NETEJA D'ALTERACIONS (Ocultem els naturals/becuadros)
+                    # NETEJA D'ALTERACIONS
                     for p in nova_part.flatten().pitches:
                         if p.accidental is not None and p.accidental.name == 'natural':
                             p.accidental.displayStatus = False
@@ -147,7 +149,7 @@ else:
 
                 st.subheader(f"🎼 Estructura: C7 | {desti_m2}7 | C7 | {desti_m4}7")
                 render_musicxml(xml_data)
-                st.download_button(label="📥 Descarregar XML", data=xml_data, file_name="funk_AABB_espaiat.musicxml")
+                st.download_button(label="📥 Descarregar XML", data=xml_data, file_name="funk_AABB_panoramic.musicxml")
                 
             except Exception as e:
                 st.error(f"Error: {e}")
