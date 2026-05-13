@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: Estètica Professional")
-st.markdown("Estructura AABB. Partitura ultra-neta i centrada, amb menys marge vertical.")
+st.markdown("Estructura AABB. Partitura ultra-neta i centrada amb marges equilibrats.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -24,7 +24,7 @@ def render_musicxml(xml_data):
     xml_str = xml_data.decode('utf-8').replace('`', '\\`').replace('$', '\\$')
     html_code = f"""
     <div style="background-color: #f0f2f6; padding: 20px; display: flex; justify-content: center;">
-        <div style="background-color: #FFFFFF; padding: 20px 15%; border-radius: 10px; width: 100%; max-width: 1200px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+        <div style="background-color: #FFFFFF; padding: 30px 8%; border-radius: 10px; width: 100%; max-width: 1200px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
             <div id="score-container"></div>
         </div>
     </div>
@@ -42,19 +42,18 @@ def render_musicxml(xml_data):
             drawingParameters: "default"
         }});
         osmd.setOptions({{
-            zoom: 2.2, 
-            spacingFactor: 1.8,
-            newSystemsFromMusicXml: true,
+            zoom: 2.0, // <-- Una mica més relaxat per assegurar l'espai
+            spacingFactor: 1.5, // <-- Espaiat més controlat
+            newSystemsFromMusicXml: true, // <-- Això respecta el salt que fem al compàs 3
             pageFormat: "Endless",
             pageBackgroundColor: "#FFFFFF"
         }});
         osmd.load(`{xml_str}`).then(() => {{
-            osmd.Sheet.Rules.MinMeasureWidth = 50; 
+            osmd.Sheet.Rules.MinMeasureWidth = 40; 
             osmd.render();
         }});
     </script>
     """
-    # Reduïm l'height per adaptar-nos a la pèrdua de marge vertical
     components.html(html_code, height=900)
 
 @st.cache_data
@@ -74,7 +73,7 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ Falten fitxers XML.")
 else:
     if st.button("🔥 GENERAR EXERCICI NET", use_container_width=True):
-        with st.spinner("Ajustant marges..."):
+        with st.spinner("Ajustant la visualització per compàs..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
@@ -128,6 +127,7 @@ else:
                                     n_nova.duration = n.duration
                                     m_nova.replace(n, n_nova)
                             memoria_B[idx_p] = copy.deepcopy(m_nova)
+                            # Aquest isNew=True assegura el salt de línia per a que 3 i 4 vagin a baix
                             m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                         elif i == 3: 
                             m_nova = copy.deepcopy(memoria_B[idx_p])
