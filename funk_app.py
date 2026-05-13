@@ -76,12 +76,11 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ Falten fitxers XML.")
 else:
     if st.button("🎲 GENERAR EXERCICI", use_container_width=True):
-        with st.spinner("Reconstruint rítmica..."):
+        with st.spinner("Generant..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
                 
-                # Tonalitats amables
                 tonalitat_base = random.choice(['C', 'G', 'D', 'A', 'F', 'Bb', 'Eb'])
                 p_armadura = music21.pitch.Pitch(tonalitat_base).transpose('P4')
                 sharps = music21.key.Key(p_armadura.name).sharps
@@ -97,8 +96,6 @@ else:
                     nova_part.insert(0, music21.clef.TrebleClef() if idx_p == 0 else music21.clef.BassClef())
                     
                     mesures = list(part_original.getElementsByClass(music21.stream.Measure))[start_m : start_m + 4]
-                    
-                    # Variables de memòria per als compassos 2 i 4
                     mem_m1, mem_m3 = None, None
 
                     for i in range(4):
@@ -108,11 +105,7 @@ else:
                             g_acords = random.choice(pool_compassos)
                             
                             if idx_p == 0:
-                                # LÒGICA DE RATXES REPARADA
                                 notes_actuals = list(m_nova.flatten().notes)
-                                offsets_ocupats = {n.offset: n for n in notes_actuals if n.duration.quarterLength <= 0.25}
-                                
-                                set_indices_blues = set()
                                 ratxes_trobades = []
                                 notes_ja_processades = set()
 
@@ -120,11 +113,9 @@ else:
                                     if n in notes_ja_processades: continue
                                     if n.duration.quarterLength > 0.25: continue
                                     
-                                    # Intentem construir una ratxa des d'aquí
                                     ratxa_temp = [idx_n]
                                     offset_esperat = n.offset + n.duration.quarterLength
                                     
-                                    # Mirem si les següents notes encaixen exactament (sense silencis)
                                     for seguent_idx in range(idx_n + 1, len(notes_actuals)):
                                         n_seg = notes_actuals[seguent_idx]
                                         if n_seg.offset == offset_esperat and n_seg.duration.quarterLength <= 0.25:
@@ -137,7 +128,6 @@ else:
                                         ratxes_trobades.append(ratxa_temp)
                                         for r_idx in ratxa_temp: notes_ja_processades.add(notes_actuals[r_idx])
                                 
-                                # Aplicar canvis
                                 set_melodia = {idx for r in ratxes_trobades for idx in r}
                                 map_blues = {}
                                 for r in ratxes_trobades:
@@ -169,7 +159,6 @@ else:
                         nova_part.append(m_nova)
                     new_score.insert(0, nova_part)
 
-                # Transposició i Armadura
                 new_score.transpose(music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(tonalitat_base + '4')), inPlace=True)
                 ks = music21.key.KeySignature(sharps)
                 for p in new_score.parts:
@@ -181,7 +170,7 @@ else:
                         for pitch in n.pitches:
                             if pitch.accidental and pitch.accidental.name == 'natural': pitch.accidental.displayStatus = False
 
-               
+                st.session_state['tonalitat'] = tonalitat_base
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".musicxml") as tmp:
                     new_score.write('musicxml', fp=tmp.name)
@@ -192,4 +181,11 @@ else:
                 st.error(f"Error: {e}")
 
     if 'xml_data' in st.session_state:
+        st.download_button(
+            label="📥 DESCARREGAR XML",
+            data=st.session_state['xml_data'],
+            file_name=f"exercici_funk_{st.session_state.get('tonalitat', 'C')}.musicxml",
+            mime="application/vnd.recordare.musicxml+xml",
+            use_container_width=True
+        )
         render_musicxml(st.session_state['xml_data'])
