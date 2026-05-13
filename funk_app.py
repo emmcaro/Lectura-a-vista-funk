@@ -75,7 +75,7 @@ path_acords = os.path.join(base_path, "font acords funk.musicxml")
 if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ Falten fitxers XML.")
 else:
-    if st.button("🎲 GENERAR EXERCICI REPARAT", use_container_width=True):
+    if st.button("🎲 GENERAR EXERCICI", use_container_width=True):
         with st.spinner("Reconstruint rítmica..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
