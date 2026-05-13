@@ -7,9 +7,10 @@ import tempfile
 import streamlit.components.v1 as components
 
 # --- CONFIGURACIÓ DE PÀGINA ---
-st.set_page_config(page_title="Funk Generator Universal", page_icon="🎸", layout="wide")
+st.set_page_config(page_title="Funk Generator Mixolydian", page_icon="🎸", layout="wide")
 
-st.title("🎸 Funk Generator: Amb Armadures Corregides")
+st.title("🎸 Funk Generator: Mode Mixolidi")
+st.subheader("Armadura de la IV per a la I (Ex: C7 -> Armadura de F)")
 
 # Escala de Blues Base (Do)
 BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
@@ -74,10 +75,10 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
 else:
     col1, col2 = st.columns(2)
     with col1:
-        boto_generar = st.button("🎲 GENERAR AMB ARMADURA", use_container_width=True)
+        boto_generar = st.button("🎲 GENERAR MIXOLIDI", use_container_width=True)
 
     if boto_generar:
-        with st.spinner("Generant i calculant armadura..."):
+        with st.spinner("Construint en Do i transposant a Mixolidi..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
@@ -85,18 +86,15 @@ else:
                 new_score = music21.stream.Score()
                 memoria_A, memoria_B = {}, {}
                 
-                # Intervals interns (Db, F, G respecte a la tònica)
-                opcions_internes = [
-                    music21.interval.Interval('m2'), 
-                    music21.interval.Interval('P4'), 
-                    music21.interval.Interval('P5')
-                ]
+                # Intervals interns (Db, F, G)
+                opcions_internes = [music21.interval.Interval('m2'), music21.interval.Interval('P4'), music21.interval.Interval('P5')]
                 itvl_compas2 = random.choice(opcions_internes)
                 itvl_compas4 = random.choice(opcions_internes)
 
                 num_m_originals = len(score_ritme.parts[0].getElementsByClass(music21.stream.Measure))
                 start_m = random.randint(0, max(0, num_m_originals - 4))
 
+                # --- 1. CONSTRUCCIÓ BASE EN DO ---
                 for idx_p, part_original in enumerate(score_ritme.parts):
                     nova_part = music21.stream.Part()
                     nova_part.insert(0, music21.clef.TrebleClef() if idx_p == 0 else music21.clef.BassClef())
@@ -105,8 +103,8 @@ else:
                     seleccio = mesures_originals[start_m : start_m + 4]
                     
                     for i in range(4):
+                        m_nova = copy.deepcopy(seleccio[i])
                         if i in [0, 2]:
-                            m_nova = copy.deepcopy(seleccio[i])
                             if idx_p == 0:
                                 grup_acords = random.choice(pool_compassos)
                                 notes_elements = list(m_nova.flatten().notes)
@@ -151,29 +149,32 @@ else:
                         nova_part.append(m_nova)
                     new_score.insert(0, nova_part)
 
-                # --- CORRECCIÓ TRANSPOSICIÓ I ARMADURA ---
+                # --- 2. TRANSPOSICIÓ I ARMADURA MIXOLÍDIA ---
                 tonalitats = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'F', 'Bb', 'Eb', 'Ab', 'Db']
-                to_final_nom = random.choice(tonalitats)
+                to_base = random.choice(tonalitats)
                 
-                # ÚS DE .sharps PER EVITAR L'ERROR
-                nombre_alteracions = music21.key.Key(to_final_nom).sharps
-                ks = music21.key.KeySignature(nombre_alteracions)
+                # CÀLCUL: L'armadura mixolídia és l'armadura de la tonalitat situada una 4a justa per sobre (o una 5a per sota)
+                p_tonica = music21.pitch.Pitch(to_base)
+                p_armadura = p_tonica.transpose('P4')
+                num_sharps = music21.key.Key(p_armadura.name).sharps
+                nova_ks = music21.key.KeySignature(num_sharps)
                 
-                itvl_final = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(to_final_nom + '4'))
+                itvl_final = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(to_base + '4'))
                 new_score.transpose(itvl_final, inPlace=True)
                 
-                st.info(f"Tonalitat de l'exercici: **{to_final_nom}**")
+                st.info(f"Tònica: **{to_base}7** | Armadura utilitzada: **{p_armadura.name} Major**")
 
                 for p in new_score.parts:
-                    p.insert(0, ks)
+                    p.insert(0, nova_ks)
+                    # Neteja de restes de transposició per mantenir l'armadura mixolídia neta
                     for m in p.getElementsByClass(music21.stream.Measure):
-                        for item in m.getElementsByClass(music21.key.KeySignature):
+                        for item in list(m.getElementsByClass(music21.key.KeySignature)):
                             m.remove(item)
                     
-                    # Neteja de visuals
+                    # Neteja de naturals redundants
                     for n in p.flatten().notes:
                         for pitch in n.pitches:
-                            if pitch.accidental is not None and pitch.accidental.name == 'natural':
+                            if pitch.accidental and pitch.accidental.name == 'natural':
                                 pitch.accidental.displayStatus = False
 
                 new_score.insert(0, music21.layout.StaffGroup(list(new_score.parts), symbol='brace', barTogether=True))
@@ -184,10 +185,10 @@ else:
                         st.session_state['xml_data'] = f.read()
                 
             except Exception as e:
-                st.error(f"Error detectat: {e}")
+                st.error(f"Error: {e}")
 
     if 'xml_data' in st.session_state:
         with col2:
             st.download_button(label="📥 Descarregar XML", data=st.session_state['xml_data'], 
-                               file_name="funk_armadura_final.musicxml", use_container_width=True)
+                               file_name="funk_mixolydian.musicxml", use_container_width=True)
         render_musicxml(st.session_state['xml_data'])
