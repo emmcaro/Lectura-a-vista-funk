@@ -10,9 +10,9 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: Melodies de Blues Fluides")
-st.subheader("Opcions Harmòniques: Db7, F7 i Dm7")
+st.subheader("Opcions Harmòniques: Db7, F7 i G7")
 
-# Escala de Blues amb F#
+# Escala de Blues amb F# (ortografia correcta)
 BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
 
 # --- VISUALITZADOR JS (OSMD) ---
@@ -87,8 +87,8 @@ else:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
                 
-                # --- NOVA LÒGICA D'ELECCIÓ HARMÒNICA ---
-                opcions = ['Db', 'F', 'D']
+                # Transposicions: Db, F o G
+                opcions = ['Db', 'F', 'G']
                 t2_key = random.choice(opcions)
                 t4_key = random.choice(opcions)
                 
@@ -146,6 +146,7 @@ else:
                         elif i == 1: 
                             m_nova = copy.deepcopy(memoria_A[idx_p])
                             m_nova.transpose(itvl2, inPlace=True)
+                            # Neteja d'armadures generades per la transposició
                             for ks in m_nova.getElementsByClass(music21.key.KeySignature): m_nova.remove(ks)
 
                         elif i == 3: 
@@ -154,6 +155,7 @@ else:
                             for ks in m_nova.getElementsByClass(music21.key.KeySignature): m_nova.remove(ks)
                             m_nova.rightBarline = music21.bar.Barline('final')
 
+                        # Salt de sistema al compàs 3
                         if i == 2:
                             m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                         
@@ -181,5 +183,5 @@ else:
     if 'xml_data' in st.session_state:
         with col2:
             st.download_button(label="📥 Descarregar XML", data=st.session_state['xml_data'], 
-                               file_name="funk_AABB_Dm7.musicxml", use_container_width=True)
+                               file_name="funk_blues_AABB_G7.musicxml", use_container_width=True)
         render_musicxml(st.session_state['xml_data'])
