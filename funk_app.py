@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: AABB Harmonitzat")
-st.markdown("Estructura: **1=2** i **3=4**. Transposició real de **DRETA i ESQUERRA**.")
+st.markdown("Estructura: **1=2** i **3=4**. Partitura neta sense alteracions de precaució i mida gran.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -33,8 +33,8 @@ def render_musicxml(xml_data):
             drawingParameters: "compacttight"
         }});
         osmd.setOptions({{
-            zoom: 1.5,
-            spacingFactor: 1.4,
+            zoom: 1.8, // <-- FONT MÉS GRAN (Abans 1.5)
+            spacingFactor: 1.5,
             newSystemsFromMusicXml: true,
             pageFormat: "Endless"
         }});
@@ -44,7 +44,7 @@ def render_musicxml(xml_data):
         }});
     </script>
     """
-    components.html(html_code, height=800, width=1000)
+    components.html(html_code, height=850, width=1000)
 
 @st.cache_data
 def carregar_pool_per_compassos(ruta):
@@ -63,25 +63,25 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ No es troben els fitxers .musicxml.")
 else:
     if st.button("🔥 GENERAR EXERCICI A-A-B-B", use_container_width=True):
-        with st.spinner("Sincronitzant mans i harmonia..."):
+        with st.spinner("Sincronitzant mans, netejant alteracions i ampliant font..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
                 
-                # Triem grups d'acords per a la variació interna (A i B)
                 acords_A = random.choice(pool_compassos)
                 acords_B = random.choice(pool_compassos)
                 
-                # Triem destí (Db7 o F7)
-                desti_parell = random.choice(['Db', 'F'])
-                # Calculem interval des de Do
-                itvl = music21.interval.Interval(music21.pitch.Pitch('C'), music21.pitch.Pitch(desti_parell))
+                desti_m2 = random.choice(['Db', 'F'])
+                desti_m4 = random.choice(['Db', 'F'])
+                
+                itvl_m2 = music21.interval.Interval(music21.pitch.Pitch('C'), music21.pitch.Pitch(desti_m2))
+                itvl_m4 = music21.interval.Interval(music21.pitch.Pitch('C'), music21.pitch.Pitch(desti_m4))
                 
                 new_score = music21.stream.Score()
                 armadura_fa = music21.key.KeySignature(-1) 
                 
-                memoria_A = {} # Per guardar el compàs 1 de cada part
-                memoria_B = {} # Per guardar el compàs 3 de cada part
+                memoria_A = {}
+                memoria_B = {}
 
                 num_m_originals = len(score_ritme.parts[0].getElementsByClass(music21.stream.Measure))
                 start_m = random.randint(0, max(0, num_m_originals - 4))
@@ -95,21 +95,20 @@ else:
                     seleccio = mesures_originals[start_m : start_m + 4]
                     
                     for i in range(4):
-                        if i == 0: # COMPÀS 1 (Base C7)
+                        if i == 0: 
                             m_nova = copy.deepcopy(seleccio[0])
-                            if idx_p == 0: # Només variem la dreta
+                            if idx_p == 0: 
                                 for n in m_nova.flatten().notes:
                                     nou_acord = music21.chord.Chord(random.choice(acords_A))
                                     nou_acord.duration = n.duration
                                     m_nova.replace(n, nou_acord)
                             memoria_A[idx_p] = copy.deepcopy(m_nova)
                             
-                        elif i == 1: # COMPÀS 2 (Clon de l'1 + Transposició TOTAL)
+                        elif i == 1: 
                             m_nova = copy.deepcopy(memoria_A[idx_p])
-                            # Apliquem transposició a tot el compàs (dreta o esquerra)
-                            m_nova.transpose(itvl, inPlace=True)
+                            m_nova.transpose(itvl_m2, inPlace=True)
 
-                        elif i == 2: # COMPÀS 3 (Base C7)
+                        elif i == 2: 
                             m_nova = copy.deepcopy(seleccio[2])
                             if idx_p == 0:
                                 for n in m_nova.flatten().notes:
@@ -119,16 +118,22 @@ else:
                             memoria_B[idx_p] = copy.deepcopy(m_nova)
                             m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                             
-                        elif i == 3: # COMPÀS 4 (Clon del 3 + Transposició TOTAL)
+                        elif i == 3: 
                             m_nova = copy.deepcopy(memoria_B[idx_p])
-                            # Apliquem transposició a tot el compàs
-                            m_nova.transpose(itvl, inPlace=True)
+                            m_nova.transpose(itvl_m4, inPlace=True)
 
                         m_nova.number = i + 1
                         m_nova.makeBeams(inPlace=True)
                         nova_part.append(m_nova)
                     
+                    # Generem notació (Això crea els becuadros de precaució)
                     nova_part = nova_part.makeNotation()
+                    
+                    # NETEJA D'ALTERACIONS (Ocultem els naturals/becuadros)
+                    for p in nova_part.flatten().pitches:
+                        if p.accidental is not None and p.accidental.name == 'natural':
+                            p.accidental.displayStatus = False
+
                     new_score.insert(0, nova_part)
 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".musicxml") as tmp:
@@ -136,9 +141,9 @@ else:
                     with open(tmp.name, 'rb') as f:
                         xml_data = f.read()
 
-                st.subheader(f"🎼 Estructura: C7 (1,3) -> {desti_parell}7 (2,4)")
+                st.subheader(f"🎼 Estructura: C7 | {desti_m2}7 | C7 | {desti_m4}7")
                 render_musicxml(xml_data)
-                st.download_button(label="📥 Descarregar XML", data=xml_data, file_name="funk_AABB_dual.musicxml")
+                st.download_button(label="📥 Descarregar XML", data=xml_data, file_name="funk_AABB_dinamic_net.musicxml")
                 
             except Exception as e:
                 st.error(f"Error: {e}")
