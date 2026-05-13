@@ -7,15 +7,15 @@ import tempfile
 import streamlit.components.v1 as components
 
 # --- CONFIGURACIÓ DE PÀGINA ---
-st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
+st.set_page_config(page_title="Funk Generator Mixolydian", page_icon="🎸", layout="wide")
 
-st.title("🎸 Funk Generator: Estructura A-A-B-B")
-st.markdown("Estructura: Compàs 1=2 i 3=4. Disseny forçat de 2 compassos per línia.")
+st.title("🎸 Funk Generator: Lògica Harmònica C7")
+st.markdown("Estructura: **1=3** (C7) | **2 i 4** (Db7 o F7). Disseny forçat 2x2.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
 nom_ritme = "buidat_ritmic_funk.musicxml"
-nom_acords = "font acords funk.musicxml"
+nom_acords = "font acords funk.musicxml" # Aquest fitxer s'usarà per al "ritme" dels acords
 path_ritme = os.path.join(base_path, nom_ritme)
 path_acords = os.path.join(base_path, nom_acords)
 
@@ -34,58 +34,49 @@ def render_musicxml(xml_data):
         }});
         
         osmd.setOptions({{
-            zoom: 1.5,
+            zoom: 1.3,
             spacingFactor: 1.4,
             newSystemsFromMusicXml: true,
-            // Reduïm l'amplada de la "pàgina" virtual per forçar que 4 compassos no caben mai en una línia
-            pageFormat: "Endless",
-            pageBackgroundColor: "#FFFFFF"
+            drawFromMeasureNumber: 1,
+            drawUpToMeasureNumber: 4
         }});
 
         osmd.load(`{xml_str}`).then(() => {{
-            // Forcem que la partitura es dibuixi en un espai més estret per obligar el salt
-            osmd.Sheet.Rules.PageWidth = 80; 
+            // TRUC DE DISSENY: Forcem que cada compàs sigui molt ample
+            // Això obliga a que només n'hi caben 2 per línia en el contenidor
+            osmd.Sheet.Rules.MinMeasureWidth = 50; 
             osmd.render();
         }});
     </script>
     """
-    components.html(html_code, height=800, width=1000)
+    components.html(html_code, height=750, width=1100)
 
-@st.cache_data
-def carregar_pool_per_compassos(ruta):
-    try:
-        score = music21.converter.parse(ruta)
-        pool = []
-        for m in score.parts[0].getElementsByClass(music21.stream.Measure):
-            notes = [[p.nameWithOctave for p in el.pitches] if el.isChord else [el.pitch.nameWithOctave] 
-                     for el in m.flatten().notes if el.isNote or el.isChord]
-            if notes: pool.append(notes)
-        return pool
-    except: return None
+# --- DEFINICIÓ D'ACORDS FIXES ---
+# Definim les veus dels acords (voicings) per a C7, Db7 i F7
+acords_vincle = {
+    "I": [['C3', 'E3', 'Bb3', 'D4'], ['C3', 'Bb3', 'E4', 'G4']], # C7 (mixolidi)
+    "bII": [['Db3', 'F3', 'B3', 'Eb4'], ['Db3', 'B3', 'F4', 'Ab4']], # Db7 (subV)
+    "IV": [['F2', 'A3', 'Eb4', 'G4'], ['F2', 'Eb4', 'A4', 'C5']]  # F7
+}
 
 # --- LÒGICA DE GENERACIÓ ---
-if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
-    st.error("⚠️ No es troben els fitxers .musicxml.")
+if not os.path.exists(path_ritme):
+    st.error(f"⚠️ No s'ha trobat el fitxer de ritme: {nom_ritme}")
 else:
-    if st.button("🔥 GENERAR ESTRUCTURA A-A-B-B", use_container_width=True):
-        with st.spinner("Calculant combinatòria..."):
+    if st.button("🔥 GENERAR GROOVE C7 - Mixolidi", use_container_width=True):
+        with st.spinner("Assignant graus harmònics..."):
             try:
-                pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
-                
-                # Triem DOS grups d'acords diferents per a la varietat harmònica
-                acords_A = random.choice(pool_compassos)
-                acords_B = random.choice(pool_compassos)
-                
                 new_score = music21.stream.Score()
-                armadura_fa = music21.key.KeySignature(-1) 
-                
-                # Memòria per a l'estructura A (1) i B (3)
-                memoria_A = {} # {idx_part: compas_obj}
-                memoria_B = {} # {idx_part: compas_obj}
+                armadura_fa = music21.key.KeySignature(-1) # Mantenim Fa Major (per el Bb de C7)
 
                 num_m_originals = len(score_ritme.parts[0].getElementsByClass(music21.stream.Measure))
                 start_m = random.randint(0, max(0, num_m_originals - 4))
+                
+                # Triem quin acord anirà als compassos parells (2 i 4)
+                acord_parell_grau = random.choice(["bII", "IV"])
+                
+                memoria_compassos = {}
 
                 for idx_p, part_original in enumerate(score_ritme.parts):
                     nova_part = music21.stream.Part()
@@ -96,30 +87,28 @@ else:
                     seleccio = mesures_originals[start_m : start_m + 4]
                     
                     for i, m in enumerate(seleccio):
-                        # LÒGICA ESTRUCTURAL A-A-B-B
-                        if i == 1: # Compàs 2 (clona el 1)
-                            m_nova = copy.deepcopy(memoria_A[idx_p])
-                        elif i == 3: # Compàs 4 (clona el 3)
-                            m_nova = copy.deepcopy(memoria_B[idx_p])
-                        else:
-                            # Generació de compàs nou (1 o 3)
-                            m_nova = copy.deepcopy(m)
-                            if idx_p == 0: # Mà dreta
-                                grup_triat = acords_A if i == 0 else acords_B
-                                for n in m_nova.flatten().notes:
-                                    nou_acord = music21.chord.Chord(random.choice(grup_triat))
-                                    nou_acord.duration = n.duration
-                                    m_nova.replace(n, nou_acord)
-                            
-                            # Guardem a la memòria corresponent
-                            if i == 0: memoria_A[idx_p] = copy.deepcopy(m_nova)
-                            if i == 2: memoria_B[idx_p] = copy.deepcopy(m_nova)
+                        m_nova = copy.deepcopy(m)
+                        m_nova.number = i + 1
+                        
+                        # Determinem quin "grau" toca segons el compàs
+                        if i == 0 or i == 2: # Compàs 1 i 3 (C7)
+                            grau_actual = "I"
+                        else: # Compàs 2 i 4 (Db7 o F7)
+                            grau_actual = acord_parell_grau
 
-                        # Forçar salt de línia al compàs 3 (índex 2)
+                        if idx_p == 0: # Mà dreta: assignem les notes de l'acord triat
+                            pool_voicings = acords_vincle[grau_actual]
+                            voicing_escollit = random.choice(pool_voicings)
+                            
+                            for n in m_nova.flatten().notes:
+                                nou_acord = music21.chord.Chord(voicing_escollit)
+                                nou_acord.duration = n.duration
+                                m_nova.replace(n, nou_acord)
+
+                        # Forçar salt de línia al compàs 3
                         if i == 2:
                             m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                         
-                        m_nova.number = i + 1
                         m_nova.makeBeams(inPlace=True)
                         nova_part.append(m_nova)
                     
@@ -131,11 +120,11 @@ else:
                     with open(tmp.name, 'rb') as f:
                         xml_data = f.read()
 
-                st.subheader("🎼 Partitura: Compàs 1=2 | Compàs 3=4")
+                st.subheader(f"🎼 Estructura: C7 (1,3) i {acord_parell_grau}7 (2,4)")
                 render_musicxml(xml_data)
                 
-                st.download_button(label="📥 Descarregar XML (AABB)", data=xml_data, 
-                                 file_name="funk_AABB.musicxml", 
+                st.download_button(label="📥 Descarregar XML", data=xml_data, 
+                                 file_name="funk_mixolidi.musicxml", 
                                  mime="application/vnd.recordare.musicxml+xml",
                                  use_container_width=True)
                 
