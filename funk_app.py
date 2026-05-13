@@ -1,4 +1,4 @@
-seguirem mes tard amb aquesta versio: import streamlit as st
+import streamlit as st
 import music21
 import os
 import random
