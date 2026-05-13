@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: Estètica Professional")
-st.markdown("Estructura AABB. Partitura ultra-neta, sense números ni textos, optimitzada per a lectura central.")
+st.markdown("Estructura AABB. Partitura ultra-neta, sense números, textos ni instruments.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -35,8 +35,10 @@ def render_musicxml(xml_data):
             autoResize: true,
             drawTitle: false,
             drawComposer: false,
+            drawPartNames: false, // <-- SOLUCIÓ: Fora el nom de l'instrument (Piano)
+            drawPartAbbreviations: false, // <-- Fora abreviatures per si de cas
             drawMetronomeMarks: false,
-            drawMeasureNumbers: false, // <-- SOLUCIÓ: Fora números de compàs
+            drawMeasureNumbers: false,
             drawingParameters: "default"
         }});
         osmd.setOptions({{
@@ -47,8 +49,6 @@ def render_musicxml(xml_data):
             pageBackgroundColor: "#FFFFFF"
         }});
         osmd.load(`{xml_str}`).then(() => {{
-            // Forcem una amplada de compàs que, sumada al padding del 15%, 
-            // només permeti dos compassos per sistema.
             osmd.Sheet.Rules.MinMeasureWidth = 50; 
             osmd.render();
         }});
@@ -73,12 +73,11 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ Falten fitxers XML.")
 else:
     if st.button("🔥 GENERAR EXERCICI NET", use_container_width=True):
-        with st.spinner("Netejant metadades i centrant partitura..."):
+        with st.spinner("Eliminant instruments i preparant disseny..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
                 
-                # Triar destins
                 desti_m2 = random.choice(['Db', 'F'])
                 desti_m4 = random.choice(['Db', 'F'])
                 itvl_m2 = music21.interval.Interval(music21.pitch.Pitch('C'), music21.pitch.Pitch(desti_m2))
@@ -86,7 +85,6 @@ else:
                 
                 new_score = music21.stream.Score()
                 
-                # NETEJA DE METADADES de music21 (perquè no surti el text "music21")
                 new_score.insert(0, music21.metadata.Metadata())
                 new_score.metadata.title = ''
                 new_score.metadata.composer = ''
@@ -99,6 +97,11 @@ else:
 
                 for idx_p, part_original in enumerate(score_ritme.parts):
                     nova_part = music21.stream.Part()
+                    
+                    # SEGURETAT EXTRA: Netegem els noms a l'XML
+                    nova_part.partName = ""
+                    nova_part.partAbbreviation = ""
+                    
                     nova_part.insert(0, music21.clef.TrebleClef() if idx_p == 0 else music21.clef.BassClef())
                     nova_part.insert(0, armadura_fa)
                     mesures_originals = list(part_original.getElementsByClass(music21.stream.Measure))
@@ -136,7 +139,7 @@ else:
                         nova_part.append(m_nova)
                     
                     nova_part = nova_part.makeNotation()
-                    # Ocultar becuadros
+                    
                     for p in nova_part.flatten().pitches:
                         if p.accidental and p.accidental.name == 'natural':
                             p.accidental.displayStatus = False
