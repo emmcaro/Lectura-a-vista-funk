@@ -10,8 +10,8 @@ st.title("🎸 Generador de Funk Aleatori")
 
 # Rutes dels fitxers
 folder = "/Users/caro/Desktop/app lectura semis"
-path_ritme = os.path.join(folder, "buidat_ritmic_funk.xml")
-path_acords = os.path.join(folder, "font acords funk.xml")
+path_ritme = os.path.join(folder, "buidat_ritmic_funk.musicxml")
+path_acords = os.path.join(folder, "font acords funk.musicxml")
 
 def carregar_pool_acords(ruta):
     score = music21.converter.parse(ruta)
