@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: AABB Harmonitzat")
-st.markdown("Estructura: **1=2** i **3=4**. Partitura neta sense alteracions de precaució, mida gran i fons blanc.")
+st.markdown("Estructura: **1=2** i **3=4**. Partitura neta sense alteracions de precaució, mida extra gran i fons blanc.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -33,11 +33,11 @@ def render_musicxml(xml_data):
             drawingParameters: "compacttight"
         }});
         osmd.setOptions({{
-            zoom: 1.8,
+            zoom: 2.1, // <-- MIDA ENCARA MÉS GRAN (Abans 1.8)
             spacingFactor: 1.5,
             newSystemsFromMusicXml: true,
             pageFormat: "Endless",
-            pageBackgroundColor: "#FFFFFF" // <-- RESTAUREM EL FONS BLANC PER AL MODE FOSC
+            pageBackgroundColor: "#FFFFFF" // Fons blanc assegurat pel mode fosc
         }});
         osmd.load(`{xml_str}`).then(() => {{
             osmd.Sheet.Rules.PageWidth = 80; 
@@ -45,7 +45,8 @@ def render_musicxml(xml_data):
         }});
     </script>
     """
-    components.html(html_code, height=850, width=1000)
+    # Hem augmentat l'alçada a 950 perquè hi càpiga el zoom nou
+    components.html(html_code, height=950, width=1000)
 
 @st.cache_data
 def carregar_pool_per_compassos(ruta):
@@ -127,7 +128,7 @@ else:
                         m_nova.makeBeams(inPlace=True)
                         nova_part.append(m_nova)
                     
-                    # Generem notació (Això crea els becuadros de precaució)
+                    # Generem notació
                     nova_part = nova_part.makeNotation()
                     
                     # NETEJA D'ALTERACIONS (Ocultem els naturals/becuadros)
