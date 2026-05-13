@@ -9,9 +9,9 @@ import streamlit.components.v1 as components
 # --- CONFIGURACIÓ DE PÀGINA ---
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
-st.title("🎸 Funk Generator: Estètica Professional")
+st.title("🎸 Funk Generator: Melodies Blues Selectives")
 
-# Escala de Blues de Do (les transposicions s'encarregaran de la resta)
+# Escala de Blues de Do
 BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
 
 # --- RUTES ---
@@ -67,7 +67,7 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
 else:
     col1, col2 = st.columns(2)
     with col1:
-        boto_generar = st.button("🔥 GENERAR EXERCICI NET", use_container_width=True)
+        boto_generar = st.button("🔥 GENERAR EXERCICI", use_container_width=True)
 
     if boto_generar:
         with st.spinner("Generant..."):
@@ -100,52 +100,49 @@ else:
                     seleccio = mesures_originals[start_m : start_m + 4]
                     
                     for i in range(4):
-                        if i == 0: 
-                            m_nova = copy.deepcopy(seleccio[0])
-                            if idx_p == 0: 
-                                grup_A = random.choice(pool_compassos)
+                        # Triem quin grup d'acords i quina selecció mirem
+                        current_seleccio = seleccio[i] if i in [0, 2] else (seleccio[0] if i == 1 else seleccio[2])
+                        
+                        if i in [0, 2]: # Compassos 1 i 3 (base per les memòries)
+                            m_nova = copy.deepcopy(current_seleccio)
+                            if idx_p == 0:
+                                grup_actiu = random.choice(pool_compassos)
+                                
+                                # --- DETECTOR DE DENSITAT AL 4rt TEMPS ---
+                                notes_4rt_temps = [n for n in m_nova.flatten().notes if n.offset >= 3.0]
+                                semicorxeres_4rt = [n for n in notes_4rt_temps if n.duration.quarterLength == 0.25]
+                                es_melodia = len(semicorxeres_4rt) >= 3
+                                # ----------------------------------------
+
                                 for n in m_nova.flatten().notes:
-                                    # LÒGICA MELODIA BLUES AL 4rt TEMPS
-                                    if n.offset >= 3.0 and n.duration.quarterLength == 0.25:
+                                    if es_melodia and n in semicorxeres_4rt:
+                                        # Creem melodia (notes individuals de l'escala blues)
                                         n_nova = music21.note.Note(random.choice(BLUES_C))
                                     else:
-                                        n_nova = music21.chord.Chord(random.choice(grup_A))
+                                        # Creem acords (com sempre)
+                                        n_nova = music21.chord.Chord(random.choice(grup_actiu))
                                     
                                     n_nova.duration = n.duration
                                     m_nova.replace(n, n_nova)
-                            memoria_A[idx_p] = copy.deepcopy(m_nova)
-                            
-                        elif i == 1: 
+                                
+                            if i == 0: memoria_A[idx_p] = copy.deepcopy(m_nova)
+                            else: memoria_B[idx_p] = copy.deepcopy(m_nova)
+
+                        elif i == 1: # Compàs 2 (Transposat de l'1)
                             m_nova = copy.deepcopy(memoria_A[idx_p])
                             m_nova.transpose(itvl_m2, inPlace=True)
                             
-                        elif i == 2: 
-                            m_nova = copy.deepcopy(seleccio[2])
-                            if idx_p == 0:
-                                grup_B = random.choice(pool_compassos)
-                                for n in m_nova.flatten().notes:
-                                    # LÒGICA MELODIA BLUES AL 4rt TEMPS
-                                    if n.offset >= 3.0 and n.duration.quarterLength == 0.25:
-                                        n_nova = music21.note.Note(random.choice(BLUES_C))
-                                    else:
-                                        n_nova = music21.chord.Chord(random.choice(grup_B))
-                                    
-                                    n_nova.duration = n.duration
-                                    m_nova.replace(n, n_nova)
-                            memoria_B[idx_p] = copy.deepcopy(m_nova)
-                            m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
-                            
-                        elif i == 3: 
+                        elif i == 3: # Compàs 4 (Transposat del 3)
                             m_nova = copy.deepcopy(memoria_B[idx_p])
                             m_nova.transpose(itvl_m4, inPlace=True)
                             m_nova.rightBarline = music21.bar.Barline('final')
 
+                        if i == 2: m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                         m_nova.number = i + 1
                         m_nova.makeBeams(inPlace=True)
                         nova_part.append(m_nova)
                     
                     nova_part = nova_part.makeNotation()
-                    # Neteja de naturals
                     for p in nova_part.flatten().pitches:
                         if p.accidental and p.accidental.name == 'natural':
                             p.accidental.displayStatus = False
@@ -164,6 +161,5 @@ else:
     if 'xml_data' in st.session_state:
         with col2:
             st.download_button(label="📥 Descarregar XML", data=st.session_state['xml_data'], 
-                               file_name="funk_AABB_final.musicxml", use_container_width=True)
+                               file_name="funk_blues_AABB.musicxml", use_container_width=True)
         render_musicxml(st.session_state['xml_data'])
-        
