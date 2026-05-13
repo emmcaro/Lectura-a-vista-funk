@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: AABB Harmonitzat")
-st.markdown("Estructura: **1=2** i **3=4**. Partitura neta sense alteracions de precaució i mida gran.")
+st.markdown("Estructura: **1=2** i **3=4**. Partitura neta sense alteracions de precaució, mida gran i fons blanc.")
 
 # --- RUTES ---
 base_path = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
@@ -33,10 +33,11 @@ def render_musicxml(xml_data):
             drawingParameters: "compacttight"
         }});
         osmd.setOptions({{
-            zoom: 1.8, // <-- FONT MÉS GRAN (Abans 1.5)
+            zoom: 1.8,
             spacingFactor: 1.5,
             newSystemsFromMusicXml: true,
-            pageFormat: "Endless"
+            pageFormat: "Endless",
+            pageBackgroundColor: "#FFFFFF" // <-- RESTAUREM EL FONS BLANC PER AL MODE FOSC
         }});
         osmd.load(`{xml_str}`).then(() => {{
             osmd.Sheet.Rules.PageWidth = 80; 
@@ -63,7 +64,7 @@ if not os.path.exists(path_ritme) or not os.path.exists(path_acords):
     st.error("⚠️ No es troben els fitxers .musicxml.")
 else:
     if st.button("🔥 GENERAR EXERCICI A-A-B-B", use_container_width=True):
-        with st.spinner("Sincronitzant mans, netejant alteracions i ampliant font..."):
+        with st.spinner("Sincronitzant mans, netejant alteracions i preparant partitura..."):
             try:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
