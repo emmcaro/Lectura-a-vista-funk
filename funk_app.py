@@ -14,7 +14,7 @@ except:
 
 st.set_page_config(page_title="Funk Generator", page_icon="🎸", layout="wide")
 
-st.title("🎸 Funk Generator & Visualizer")
+st.title("🎸 Funk Generator (F Major Edition)")
 
 # --- RUTES ---
 path_ritme = "buidat_ritmic_funk.musicxml"
@@ -37,10 +37,7 @@ def carregar_pool_acords(ruta):
         return []
 
 def visualitzar_partitura(xml_data):
-    """Injecta OSMD per renderitzar el MusicXML en el navegador."""
-    # Escapem les cometes del XML per no trencar el JS
     xml_str = xml_data.decode('utf-8').replace('`', '\\`').replace('$', '\\$')
-    
     html_code = f"""
     <div id="osmd-container"></div>
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.5.8/build/opensheetmusicdisplay.min.js"></script>
@@ -49,14 +46,15 @@ def visualitzar_partitura(xml_data):
             autoResize: true,
             drawTitle: false,
             drawSubtitle: false,
-            drawComposer: false
+            drawComposer: false,
+            drawingParameters: "compacttight"
         }});
         osmd.load(`{xml_str}`).then(function() {{
             osmd.render();
         }});
     </script>
     """
-    components.html(html_code, height=600, scrolling=True)
+    components.html(html_code, height=500, scrolling=True)
 
 # --- INTERFÍCIE ---
 
@@ -72,20 +70,42 @@ if st.button("🚀 Generar i Visualitzar"):
             start_m = random.randint(0, max(0, total_m - 4))
             
             new_score = music21.stream.Score()
+            
+            # Armadura de Fa Major (1 bemoll)
+            armadura_fa = music21.key.KeySignature(-1) 
+            
             for idx_p, part_vella in enumerate(parts_originals):
                 nova_part = music21.stream.Part()
+                
+                # 1. TREIEM EL NOM DE L'INSTRUMENT
+                nova_part.partName = "" 
+                nova_part.partAbbreviation = ""
+                
                 mesures = list(part_vella.getElementsByClass(music21.stream.Measure))[start_m : start_m + 4]
+                
                 for i, m in enumerate(mesures):
                     m_nova = copy.deepcopy(m)
                     m_nova.number = i + 1 
-                    if idx_p == 0: # Dreta
+                    
+                    # 2. APLICAR ARMADURA A CADA COMPÀS
+                    m_nova.insert(0, armadura_fa)
+                    
+                    # 3. FORÇAR CLAU DE FA A LA MÀ ESQUERRA (Part 1)
+                    if idx_p == 1:
+                        m_nova.clef = music21.clef.BassClef()
+                    
+                    # Processar la mà dreta amb el pool d'acords
+                    if idx_p == 0: 
+                        m_nova.clef = music21.clef.TrebleClef()
                         for n in m_nova.flatten().notes:
                             nou_set = random.choice(pool)
                             acord_nou = music21.chord.Chord(nou_set)
                             acord_nou.duration = n.duration
                             acord_nou.articulations = n.articulations
                             m_nova.replace(n, acord_nou)
+                    
                     nova_part.append(m_nova)
+                
                 new_score.insert(0, nova_part)
             
             # Generem dades
@@ -93,17 +113,16 @@ if st.button("🚀 Generar i Visualitzar"):
             with open(tmp_fp, 'rb') as f:
                 xml_data = f.read()
             
-            st.success(f"Generat! Compassos {start_m+1} a {start_m+4}")
+            st.success(f"Generat en Fa Major! (Compassos {start_m+1} a {start_m+4})")
             
-            # --- VISUALITZACIÓ ---
-            st.subheader("Visualització en pantalla:")
+            # Visualització
             visualitzar_partitura(xml_data)
             
-            # --- DESCÀRREGA ---
+            # Descàrrega
             st.download_button(
                 label="⬇️ Descarregar MusicXML",
                 data=xml_data,
-                file_name="funk_generat.musicxml",
+                file_name="funk_F_major.musicxml",
                 mime="application/vnd.recordare.musicxml+xml"
             )
             
