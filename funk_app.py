@@ -10,8 +10,9 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Funk Generator AABB", page_icon="🎸", layout="wide")
 
 st.title("🎸 Funk Generator: Melodies de Blues Fluides")
+st.subheader("Opcions Harmòniques: Db7, F7 i Dm7")
 
-# Escala de Blues amb F# (ortografia correcta)
+# Escala de Blues amb F#
 BLUES_C = ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5']
 
 # --- VISUALITZADOR JS (OSMD) ---
@@ -30,10 +31,10 @@ def render_musicxml(xml_data):
             drawPartAbbreviations: false, drawMetronomeMarks: false, drawMeasureNumbers: false
         }});
         osmd.setOptions({{
-            zoom: 1.4, // Una mica més petit per assegurar que caben 2 compassos
+            zoom: 1.4,
             spacingFactor: 1.0,
-            newSystemsFromMusicXml: true, // Crucial: obeeix el salt del Python
-            pageFormat: "A4", // Establir un format fix ajuda a la coherència
+            newSystemsFromMusicXml: true,
+            pageFormat: "A4",
             pageBackgroundColor: "#FFFFFF"
         }});
         osmd.load(`{xml_str}`).then(() => osmd.render());
@@ -86,8 +87,11 @@ else:
                 pool_compassos = carregar_pool_per_compassos(path_acords)
                 score_ritme = music21.converter.parse(path_ritme)
                 
-                t2_key = random.choice(['Db', 'F'])
-                t4_key = random.choice(['Db', 'F'])
+                # --- NOVA LÒGICA D'ELECCIÓ HARMÒNICA ---
+                opcions = ['Db', 'F', 'D']
+                t2_key = random.choice(opcions)
+                t4_key = random.choice(opcions)
+                
                 itvl2 = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(t2_key+'4'))
                 itvl4 = music21.interval.Interval(music21.pitch.Pitch('C4'), music21.pitch.Pitch(t4_key+'4'))
                 
@@ -100,8 +104,6 @@ else:
                 for idx_p, part_original in enumerate(score_ritme.parts):
                     nova_part = music21.stream.Part()
                     nova_part.insert(0, music21.clef.TrebleClef() if idx_p == 0 else music21.clef.BassClef())
-                    
-                    # Posem l'armadura al principi de la part
                     nova_part.insert(0, music21.key.KeySignature(-1)) 
                     
                     mesures_originals = list(part_original.getElementsByClass(music21.stream.Measure))
@@ -144,19 +146,14 @@ else:
                         elif i == 1: 
                             m_nova = copy.deepcopy(memoria_A[idx_p])
                             m_nova.transpose(itvl2, inPlace=True)
-                            # SOLUCIÓ: Eliminem armadures fantasmes creades per la transposició
-                            for ks in m_nova.getElementsByClass(music21.key.KeySignature):
-                                m_nova.remove(ks)
+                            for ks in m_nova.getElementsByClass(music21.key.KeySignature): m_nova.remove(ks)
 
                         elif i == 3: 
                             m_nova = copy.deepcopy(memoria_B[idx_p])
                             m_nova.transpose(itvl4, inPlace=True)
-                            # SOLUCIÓ: Eliminem armadures fantasmes
-                            for ks in m_nova.getElementsByClass(music21.key.KeySignature):
-                                m_nova.remove(ks)
+                            for ks in m_nova.getElementsByClass(music21.key.KeySignature): m_nova.remove(ks)
                             m_nova.rightBarline = music21.bar.Barline('final')
 
-                        # SALT DE LÍNIA: Només al compàs 3
                         if i == 2:
                             m_nova.insert(0, music21.layout.SystemLayout(isNew=True))
                         
@@ -164,7 +161,6 @@ else:
                         m_nova.makeBeams(inPlace=True)
                         nova_part.append(m_nova)
                     
-                    # Neteja final de la part
                     nova_part = nova_part.makeNotation()
                     for p in nova_part.flatten().pitches:
                         if p.accidental and p.accidental.name == 'natural':
@@ -185,5 +181,5 @@ else:
     if 'xml_data' in st.session_state:
         with col2:
             st.download_button(label="📥 Descarregar XML", data=st.session_state['xml_data'], 
-                               file_name="funk_blues_AABB.musicxml", use_container_width=True)
+                               file_name="funk_AABB_Dm7.musicxml", use_container_width=True)
         render_musicxml(st.session_state['xml_data'])
